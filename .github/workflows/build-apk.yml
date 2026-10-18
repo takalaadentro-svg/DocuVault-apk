@@ -52,9 +52,17 @@ jobs:
         run: |
           ./gradlew :app:assembleDebug --stacktrace --no-daemon 2>&1 | tee ../../gradle-build.log
 
-      - name: Print Gradle Build Summary
+      - name: Print Entire Gradle Log
+        if: always()
         run: |
-          tail -n 60 gradle-build.log
+          cat gradle-build.log
+
+      - name: Upload Debug Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-debug-log
+          path: gradle-build.log
 
       - name: Locate and Rename APK
         run: |
