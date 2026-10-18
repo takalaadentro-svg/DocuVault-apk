@@ -50,19 +50,18 @@ jobs:
       - name: Build Android Debug APK
         working-directory: mobile/android
         run: |
-          ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee ../../gradle-build.log
+          ./gradlew :app:assembleDebug --stacktrace --no-daemon 2>&1 | tee ../../gradle-build.log
 
-      - name: Print Gradle Failure Log
-        if: failure()
+      - name: Print Gradle Build Summary
         run: |
-          tail -n 120 gradle-build.log
+          tail -n 60 gradle-build.log
 
       - name: Locate and Rename APK
         run: |
           mkdir -p build-output
           echo "Locating built APK..."
-          find mobile/android -name "*.apk"
-          FIRST_APK=$(find mobile/android -name "*.apk" | head -n 1)
+          find . -name "*.apk"
+          FIRST_APK=$(find . -name "*.apk" | head -n 1)
           echo "Selected APK: $FIRST_APK"
           cp "$FIRST_APK" build-output/DocuVault-v1.0.0.apk
           ls -lh build-output/
