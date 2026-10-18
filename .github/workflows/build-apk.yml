@@ -1,5 +1,8 @@
 name: Build DocuVault Android APK
 
+permissions:
+  contents: write
+
 on:
   push:
     branches: [ main, master ]
@@ -71,7 +74,7 @@ jobs:
           git config user.email "github-actions@github.com"
           git checkout -B debug-log
           git add -f gradle-build.log
-          git commit -m "Auto gradle log dump" || true
+          git commit -m "Auto gradle log dump [skip ci]" || true
           git push -f origin debug-log || true
 
       - name: Locate and Rename APK
