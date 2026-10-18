@@ -1,0 +1,68 @@
+{
+  "expo": {
+    "name": "DocuVault",
+    "slug": "docuvault",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A192F"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.docuvault.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "DocuVault requires camera access to scan QR codes for secure document sharing and capture document photos.",
+        "NSFaceIDUsageDescription": "DocuVault uses biometric authentication to protect your private documents.",
+        "NSPhotoLibraryUsageDescription": "DocuVault accesses your photo library to allow selecting documents for secure upload."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0A192F"
+      },
+      "package": "com.digivault.app",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-document-picker",
+        {
+          "iCloudContainerEnvironment": "Production"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow DocuVault to scan QR codes and capture documents."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#0D9488"
+        }
+      ]
+    ],
+    "scheme": "docuvault"
+  }
+}

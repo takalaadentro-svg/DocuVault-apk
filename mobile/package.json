@@ -1,0 +1,39 @@
+{
+  "name": "docuvault-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host --port 5173",
+    "build": "vite build",
+    "preview": "vite preview",
+    "cap:sync": "npx cap sync android",
+    "cap:open": "npx cap open android",
+    "build:mobile": "vite build && npx cap sync android",
+    "test": "node --test test/components.test.js"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
+    "@hookform/resolvers": "^3.3.4",
+    "@rollup/wasm-node": "^4.64.6",
+    "@tanstack/react-query": "^5.28.9",
+    "canvas-confetti": "^1.9.2",
+    "lucide-react": "^0.359.0",
+    "qrcode.react": "^3.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-hook-form": "^7.51.1",
+    "react-native-web": "^0.19.10",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/canvas-confetti": "^1.9.0",
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "^5.2.2",
+    "vite": "^5.1.6"
+  }
+}

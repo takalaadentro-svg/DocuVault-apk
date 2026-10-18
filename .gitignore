@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing and Caches
+.pytest_cache/
+__pycache__/
+*.py[cod]
+*$py.class
+.coverage
+.coverage.*
+htmlcov/
+test_*.db
+
+# Build outputs & caches
+dist/
+build/
+target/
+*.egg-info/
+*.jar
+*.war
+.m2/
+**/.m2/
+.gradle/
+**/.gradle/
+**/android/.gradle/
+**/android/app/build/
+storage_uploads/
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# IDE and Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS artifacts
+$RECYCLE.BIN/
+

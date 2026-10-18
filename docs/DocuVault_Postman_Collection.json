@@ -1,0 +1,265 @@
+{
+  "info": {
+    "_postman_id": "docuvault-api-collection-2026",
+    "name": "DocuVault REST API Collection",
+    "description": "Comprehensive Postman API Test Suite for DocuVault — Smart Digital Document Locker & Family Emergency Vault.\nConfigured for the Spring Boot (:8080) REST backend specification.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "documentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "shareToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Authentication",
+      "item": [
+        {
+          "name": "Register User",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"testuser@digivault.com\",\n  \"full_name\": \"Engineering Student\",\n  \"password\": \"SecurePass123!\",\n  \"phone\": \"+919876543210\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/register", "host": ["{{baseUrl}}"], "path": ["auth", "register"] }
+          }
+        },
+        {
+          "name": "Login User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.access_token) {",
+                  "    pm.collectionVariables.set('authToken', jsonData.access_token);",
+                  "} else if (jsonData.data && jsonData.data.accessToken) {",
+                  "    pm.collectionVariables.set('authToken', jsonData.data.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"testuser@digivault.com\",\n  \"password\": \"SecurePass123!\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+          }
+        },
+        {
+          "name": "Get Current User Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/auth/me", "host": ["{{baseUrl}}"], "path": ["auth", "me"] }
+          }
+        },
+        {
+          "name": "Configure Quick PIN",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pin\": \"2468\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/quick-pin", "host": ["{{baseUrl}}"], "path": ["auth", "quick-pin"] }
+          }
+        },
+        {
+          "name": "Verify Quick PIN",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pin\": \"2468\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/verify-pin", "host": ["{{baseUrl}}"], "path": ["auth", "verify-pin"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Document Locker & DNA",
+      "item": [
+        {
+          "name": "Get All Documents (Personal & Family)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/documents",
+              "host": ["{{baseUrl}}"],
+              "path": ["documents"]
+            }
+          }
+        },
+        {
+          "name": "Search Documents (Text & OCR Search)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/documents?search=Aadhaar",
+              "host": ["{{baseUrl}}"],
+              "path": ["documents"],
+              "query": [
+                { "key": "search", "value": "Aadhaar" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Verify Document DNA (SHA-256 Cryptographic Audit)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/documents/{{documentId}}/verify-dna",
+              "host": ["{{baseUrl}}"],
+              "path": ["documents", "{{documentId}}", "verify-dna"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Emergency Vault",
+      "item": [
+        {
+          "name": "Get Emergency Contacts",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/emergency/contacts", "host": ["{{baseUrl}}"], "path": ["emergency", "contacts"] }
+          }
+        },
+        {
+          "name": "Add Emergency Contact",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Emergency Guardian\",\n  \"relationship\": \"Brother\",\n  \"phone\": \"+919876543211\",\n  \"email\": \"guardian@digivault.com\",\n  \"can_access_emergency_docs\": true\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/emergency/contacts", "host": ["{{baseUrl}}"], "path": ["emergency", "contacts"] }
+          }
+        },
+        {
+          "name": "Get Emergency Medical Info",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/emergency/medical-info", "host": ["{{baseUrl}}"], "path": ["emergency", "medical-info"] }
+          }
+        },
+        {
+          "name": "Trigger Break-Glass Emergency Mode",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pin\": \"2468\",\n  \"biometric\": true\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/emergency/break-glass", "host": ["{{baseUrl}}"], "path": ["emergency", "break-glass"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. QR-Based Document Sharing",
+      "item": [
+        {
+          "name": "Generate QR Share Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_id\": \"{{documentId}}\",\n  \"expires_in_hours\": 24,\n  \"max_views\": 3,\n  \"pin\": \"1234\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/share/create", "host": ["{{baseUrl}}"], "path": ["share", "create"] }
+          }
+        },
+        {
+          "name": "Access Public Shared Document",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/share/public/{{shareToken}}?pin=1234", "host": ["{{baseUrl}}"], "path": ["share", "public", "{{shareToken}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Diagnostics & Architecture Verification",
+      "item": [
+        {
+          "name": "Health Check & Matrix Verification",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+          }
+        }
+      ]
+    }
+  ]
+}

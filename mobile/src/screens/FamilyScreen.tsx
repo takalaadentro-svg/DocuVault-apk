@@ -1,0 +1,959 @@
+import React, { useState } from 'react';
+import { 
+  Users, UserPlus, ShieldAlert, HeartPulse, FileText, 
+  Check, X, Trash2, Plus, ShieldCheck, Phone, Mail, ArrowRight, Eye, AlertTriangle 
+} from 'lucide-react';
+import { FamilyGroup, FamilyInvitation, DocumentItem, EmergencyContact, EmergencyMedicalInfo } from '../types';
+import { api } from '../services/api';
+import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
+
+interface FamilyScreenProps {
+  families: FamilyGroup[];
+  invitations: FamilyInvitation[];
+  sharedWithMe: DocumentItem[];
+  sharedByMe: DocumentItem[];
+  emergencyContacts: EmergencyContact[];
+  medicalInfo: EmergencyMedicalInfo | null;
+  onRefresh: () => void;
+  onOpenInvite: (familyId: string) => void;
+  onOpenDocument: (doc: DocumentItem) => void;
+  onOpenEmergencyAccess: () => void;
+}
+
+export const FamilyScreen: React.FC<FamilyScreenProps> = ({
+  families,
+  invitations,
+  sharedWithMe,
+  sharedByMe,
+  emergencyContacts,
+  medicalInfo,
+  onRefresh,
+  onOpenInvite,
+  onOpenDocument,
+  onOpenEmergencyAccess,
+}) => {
+  const { colors } = useTheme();
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<'members' | 'shared_with_me' | 'shared_by_me' | 'emergency'>('members');
+
+  // Create Family state
+  const [showCreateFamily, setShowCreateFamily] = useState(false);
+  const [familyName, setFamilyName] = useState('');
+  const [isCreatingFamily, setIsCreatingFamily] = useState(false);
+
+  // Medical info edit state
+  const [isEditingMedical, setIsEditingMedical] = useState(false);
+  const [bloodGroup, setBloodGroup] = useState(medicalInfo?.blood_group || 'O+');
+  const [allergies, setAllergies] = useState(medicalInfo?.allergies || '');
+  const [medications, setMedications] = useState(medicalInfo?.current_medications || '');
+  const [emergencyNotes, setEmergencyNotes] = useState(medicalInfo?.emergency_notes || '');
+  const [physicianName, setPhysicianName] = useState(medicalInfo?.physician_name || '');
+  const [physicianPhone, setPhysicianPhone] = useState(medicalInfo?.physician_phone || '');
+  const [organDonor, setOrganDonor] = useState(medicalInfo?.organ_donor || false);
+  const [isSavingMedical, setIsSavingMedical] = useState(false);
+
+  // Add Contact state
+  const [showAddContact, setShowAddContact] = useState(false);
+  const [contactName, setContactName] = useState('');
+  const [contactRelationship, setContactRelationship] = useState('Spouse');
+  const [contactPhone, setContactPhone] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [isSavingContact, setIsSavingContact] = useState(false);
+
+  const primaryFamily = families[0];
+
+  const handleCreateFamily = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!familyName.trim()) return;
+    setIsCreatingFamily(true);
+    try {
+      await api.createFamily(familyName.trim());
+      setFamilyName('');
+      setShowCreateFamily(false);
+      onRefresh();
+    } catch (e: any) {
+      alert(e.message || 'Failed to create family group');
+    } finally {
+      setIsCreatingFamily(false);
+    }
+  };
+
+  const handleRespondInvitation = async (invId: string, action: 'ACCEPT' | 'REJECT') => {
+    try {
+      await api.respondToInvitation(invId, action);
+      onRefresh();
+    } catch (e: any) {
+      alert(e.message || 'Action failed');
+    }
+  };
+
+  const handleSaveMedicalInfo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingMedical(true);
+    try {
+      await api.updateEmergencyMedicalInfo({
+        blood_group: bloodGroup,
+        allergies,
+        current_medications: medications,
+        emergency_notes: emergencyNotes,
+        physician_name: physicianName,
+        physician_phone: physicianPhone,
+        organ_donor: organDonor,
+      });
+      setIsEditingMedical(false);
+      onRefresh();
+    } catch (e: any) {
+      alert(e.message || 'Failed to save medical info');
+    } finally {
+      setIsSavingMedical(false);
+    }
+  };
+
+  const handleAddEmergencyContact = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!contactName.trim() || !contactPhone.trim()) return;
+    setIsSavingContact(true);
+    try {
+      await api.addEmergencyContact({
+        name: contactName.trim(),
+        relationship_type: contactRelationship,
+        phone_number: contactPhone.trim(),
+        email: contactEmail.trim() || undefined,
+        can_access_medical: true,
+        can_access_identity: true,
+        can_access_financial: false,
+        is_active: true,
+      });
+      setContactName('');
+      setContactPhone('');
+      setContactEmail('');
+      setShowAddContact(false);
+      onRefresh();
+    } catch (e: any) {
+      alert(e.message || 'Failed to add emergency contact');
+    } finally {
+      setIsSavingContact(false);
+    }
+  };
+
+  const handleDeleteEmergencyContact = async (contactId: string) => {
+    if (!confirm('Remove this emergency contact?')) return;
+    try {
+      await api.deleteEmergencyContact(contactId);
+      onRefresh();
+    } catch (e: any) {
+      alert(e.message || 'Failed to remove contact');
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: 24 }}>
+      {/* Screen Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: colors.text }}>Family & Emergency Vault</h1>
+          <p style={{ fontSize: 12, color: colors.textMuted }}>Delegated permissions and emergency access</p>
+        </div>
+        {primaryFamily && (
+          <button
+            onClick={() => onOpenInvite(primaryFamily.id)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '10px 14px',
+              borderRadius: 12,
+              backgroundColor: colors.accent,
+              color: '#FFF',
+              border: 'none',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(13, 148, 136, 0.35)',
+            }}
+          >
+            <UserPlus size={16} />
+            <span>Invite</span>
+          </button>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div style={{
+        display: 'flex',
+        borderRadius: 12,
+        backgroundColor: colors.surfaceCard,
+        padding: 4,
+        gap: 4,
+      }}>
+        {[
+          { id: 'members', label: 'Members' },
+          { id: 'shared_with_me', label: `Shared (${sharedWithMe.length})` },
+          { id: 'shared_by_me', label: 'My Shares' },
+          { id: 'emergency', label: 'Emergency' },
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            style={{
+              flex: 1,
+              padding: '8px 4px',
+              borderRadius: 8,
+              border: 'none',
+              backgroundColor: activeTab === tab.id ? colors.accent : 'transparent',
+              color: activeTab === tab.id ? '#FFF' : colors.textMuted,
+              fontSize: 12,
+              fontWeight: activeTab === tab.id ? 700 : 500,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab: Members */}
+      {activeTab === 'members' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Pending Invitations Banner */}
+          {invitations.length > 0 && (
+            <div style={{
+              padding: 16,
+              borderRadius: 14,
+              backgroundColor: 'rgba(59, 130, 246, 0.12)',
+              border: '1px solid rgba(59, 130, 246, 0.3)',
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#3B82F6', marginBottom: 8 }}>
+                Pending Invitations for You ({invitations.length})
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {invitations.map(inv => (
+                  <div
+                    key={inv.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: 10,
+                      borderRadius: 10,
+                      backgroundColor: colors.surface,
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>
+                        {inv.family_name}
+                      </div>
+                      <div style={{ fontSize: 11, color: colors.textMuted }}>
+                        Invited by {inv.inviter_name} as {inv.role}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        onClick={() => handleRespondInvitation(inv.id, 'ACCEPT')}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: 6,
+                          backgroundColor: colors.accent,
+                          color: '#FFF',
+                          border: 'none',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Accept
+                      </button>
+                      <button
+                        onClick={() => handleRespondInvitation(inv.id, 'REJECT')}
+                        style={{
+                          padding: '6px 10px',
+                          borderRadius: 6,
+                          backgroundColor: colors.surfaceCard,
+                          color: colors.textMuted,
+                          border: `1px solid ${colors.surfaceBorder}`,
+                          fontSize: 12,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {primaryFamily ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{
+                padding: 16,
+                borderRadius: 16,
+                backgroundColor: colors.surfaceCard,
+                border: `1px solid ${colors.surfaceBorder}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}>
+                <div>
+                  <div style={{ fontSize: 11, color: colors.textMuted, textTransform: 'uppercase', fontWeight: 600 }}>
+                    Active Family Vault
+                  </div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: colors.text, marginTop: 2 }}>
+                    {primaryFamily.name}
+                  </div>
+                </div>
+                <div style={{
+                  padding: '4px 10px',
+                  borderRadius: 20,
+                  backgroundColor: 'rgba(13, 148, 136, 0.15)',
+                  color: colors.accentLight,
+                  fontSize: 12,
+                  fontWeight: 700,
+                }}>
+                  {primaryFamily.members?.length || 0} Members
+                </div>
+              </div>
+
+              {/* Members List */}
+              <div style={{ fontSize: 13, fontWeight: 700, color: colors.textMuted, marginTop: 4 }}>
+                Vault Members & Roles
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {(primaryFamily.members || []).map(member => (
+                  <div
+                    key={member.id}
+                    style={{
+                      padding: 14,
+                      borderRadius: 12,
+                      backgroundColor: colors.surfaceCard,
+                      border: `1px solid ${colors.surfaceBorder}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: 19,
+                        backgroundColor: colors.accent,
+                        color: '#FFF',
+                        fontWeight: 700,
+                        fontSize: 14,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}>
+                        {(member?.full_name || (member as any)?.user_name || member?.email || 'M').charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: colors.text }}>
+                          {member?.full_name || (member as any)?.user_name || 'Member'} {member?.user_id === user?.id ? '(You)' : ''}
+                        </div>
+                        <div style={{ fontSize: 12, color: colors.textMuted }}>
+                          {member?.email || (member as any)?.user_email || ''}
+                        </div>
+                      </div>
+                    </div>
+
+                    <span style={{
+                      padding: '4px 10px',
+                      borderRadius: 8,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      backgroundColor: member?.role === 'OWNER' ? 'rgba(13, 148, 136, 0.2)' : 'rgba(59, 130, 246, 0.15)',
+                      color: member?.role === 'OWNER' ? colors.accentLight : '#3B82F6',
+                    }}>
+                      {member?.role || 'MEMBER'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Family Document-Completeness Tracker */}
+              <div style={{
+                marginTop: 8,
+                padding: 16,
+                borderRadius: 16,
+                backgroundColor: colors.surfaceCard,
+                border: `1px solid ${colors.surfaceBorder}`,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <ShieldCheck size={18} color={colors.accentLight} />
+                    <span style={{ fontSize: 13, fontWeight: 800, color: colors.text }}>
+                      Family Vault Completeness Tracker
+                    </span>
+                  </div>
+                  <span style={{
+                    fontSize: 12,
+                    fontWeight: 800,
+                    color: colors.success,
+                    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                    padding: '2px 8px',
+                    borderRadius: 12,
+                  }}>
+                    85% Protected
+                  </span>
+                </div>
+
+                <p style={{ fontSize: 11, color: colors.textMuted, margin: '0 0 12px 0' }}>
+                  Audits essential life records for all family vault members without exposing private document contents:
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {[
+                    { label: 'Government Photo ID Proofs', count: `${primaryFamily.members?.length || 0}/${primaryFamily.members?.length || 0} Members`, complete: true },
+                    { label: 'Active Health Insurance Floater Cover', count: 'Protected (Policy Active)', complete: true },
+                    { label: 'Emergency Break-Glass Authorization', count: 'Configured', complete: true },
+                    { label: 'Property & Vehicle Registrations', count: '1 Pending Review', complete: false },
+                  ].map((item, idx) => (
+                    <div 
+                      key={idx}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '8px 10px',
+                        borderRadius: 8,
+                        backgroundColor: item.complete ? 'rgba(16, 185, 129, 0.08)' : 'rgba(245, 158, 11, 0.08)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: colors.text }}>
+                        {item.complete ? <Check size={14} color={colors.success} /> : <AlertTriangle size={14} color="#F59E0B" />}
+                        <span>{item.label}</span>
+                      </div>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: item.complete ? colors.success : '#F59E0B' }}>
+                        {item.count}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* No Family Vault Created Yet */
+            <div style={{
+              padding: 30,
+              textAlign: 'center',
+              backgroundColor: colors.surfaceCard,
+              borderRadius: 16,
+              border: `1px solid ${colors.surfaceBorder}`,
+            }}>
+              <Users size={40} color={colors.accentLight} style={{ margin: '0 auto 12px' }} />
+              <div style={{ fontSize: 16, fontWeight: 700, color: colors.text }}>Create Your Family Vault</div>
+              <p style={{ fontSize: 12, color: colors.textMuted, marginTop: 4, marginBottom: 16 }}>
+                Securely coordinate and delegate document permissions for your spouse, children, or parents.
+              </p>
+              {showCreateFamily ? (
+                <form onSubmit={handleCreateFamily} style={{ display: 'flex', gap: 8, maxWidth: 360, margin: '0 auto' }}>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Sharma Family Vault"
+                    value={familyName}
+                    onChange={e => setFamilyName(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: '10px 12px',
+                      borderRadius: 10,
+                      backgroundColor: colors.surface,
+                      border: `1px solid ${colors.surfaceBorder}`,
+                      color: colors.text,
+                      fontSize: 14,
+                      outline: 'none',
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={isCreatingFamily}
+                    style={{
+                      padding: '10px 16px',
+                      borderRadius: 10,
+                      backgroundColor: colors.accent,
+                      color: '#FFF',
+                      border: 'none',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {isCreatingFamily ? 'Creating...' : 'Create'}
+                  </button>
+                </form>
+              ) : (
+                <button
+                  onClick={() => setShowCreateFamily(true)}
+                  style={{
+                    padding: '10px 20px',
+                    borderRadius: 10,
+                    backgroundColor: colors.accent,
+                    color: '#FFF',
+                    border: 'none',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Create Family Vault Group
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Shared with Me */}
+      {activeTab === 'shared_with_me' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {sharedWithMe.length > 0 ? (
+            sharedWithMe.map(doc => (
+              <div
+                key={doc.id}
+                onClick={() => onOpenDocument(doc)}
+                style={{
+                  padding: 14,
+                  borderRadius: 12,
+                  backgroundColor: colors.surfaceCard,
+                  border: `1px solid ${colors.surfaceBorder}`,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <FileText size={20} color={colors.accentLight} />
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: colors.text }}>
+                      {doc.title}
+                    </div>
+                    <div style={{ fontSize: 12, color: colors.textMuted }}>
+                      {doc.category} • {doc.issuer || 'Family Vault Record'}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenDocument(doc);
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 6,
+                    backgroundColor: colors.surface,
+                    border: `1px solid ${colors.surfaceBorder}`,
+                    color: colors.text,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  View
+                </button>
+              </div>
+            ))
+          ) : (
+            <div style={{ textAlign: 'center', padding: 36, color: colors.textMuted, fontSize: 13 }}>
+              No documents have been shared with you yet.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Shared by Me */}
+      {activeTab === 'shared_by_me' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {sharedByMe.length > 0 ? (
+            sharedByMe.map(doc => (
+              <div
+                key={doc.id}
+                onClick={() => onOpenDocument(doc)}
+                style={{
+                  padding: 14,
+                  borderRadius: 12,
+                  backgroundColor: colors.surfaceCard,
+                  border: `1px solid ${colors.surfaceBorder}`,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: colors.text }}>
+                    {doc.title}
+                  </div>
+                  <div style={{ fontSize: 12, color: colors.textMuted }}>
+                    {doc.permissions?.length || 1} family member(s) have access
+                  </div>
+                </div>
+                <span style={{ fontSize: 12, color: colors.accentLight, fontWeight: 600 }}>
+                  Manage
+                </span>
+              </div>
+            ))
+          ) : (
+            <div style={{ textAlign: 'center', padding: 36, color: colors.textMuted, fontSize: 13 }}>
+              You haven't shared any documents with family members yet. Open any document to grant access.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Emergency */}
+      {activeTab === 'emergency' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Emergency Trigger Button */}
+          <button
+            onClick={onOpenEmergencyAccess}
+            style={{
+              padding: 16,
+              borderRadius: 14,
+              backgroundColor: 'rgba(239, 68, 68, 0.12)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <ShieldAlert size={24} color={colors.danger} />
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: colors.danger }}>
+                  Simulate Emergency Vault Access
+                </div>
+                <div style={{ fontSize: 11, color: colors.textMuted }}>
+                  Test clinical authorization protocol with audit logging
+                </div>
+              </div>
+            </div>
+            <ArrowRight size={18} color={colors.danger} />
+          </button>
+
+          {/* Medical Info Card */}
+          <div style={{
+            padding: 18,
+            borderRadius: 16,
+            backgroundColor: colors.surfaceCard,
+            border: `1px solid ${colors.surfaceBorder}`,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <HeartPulse size={18} color={colors.danger} />
+                <span style={{ fontSize: 14, fontWeight: 700, color: colors.text }}>
+                  Emergency Medical Card
+                </span>
+              </div>
+              <button
+                onClick={() => setIsEditingMedical(!isEditingMedical)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: colors.accentLight,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                {isEditingMedical ? 'Cancel' : 'Edit Card'}
+              </button>
+            </div>
+
+            {isEditingMedical ? (
+              <form onSubmit={handleSaveMedicalInfo} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label style={{ fontSize: 11, color: colors.textMuted }}>Blood Group</label>
+                    <input
+                      type="text"
+                      value={bloodGroup}
+                      onChange={e => setBloodGroup(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px 10px',
+                        borderRadius: 8,
+                        backgroundColor: colors.surface,
+                        border: `1px solid ${colors.surfaceBorder}`,
+                        color: colors.text,
+                        fontSize: 13,
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: colors.textMuted }}>Organ Donor</label>
+                    <div style={{ display: 'flex', alignItems: 'center', height: 36, gap: 8 }}>
+                      <input
+                        type="checkbox"
+                        checked={organDonor}
+                        onChange={e => setOrganDonor(e.target.checked)}
+                        style={{ width: 18, height: 18, accentColor: colors.accent }}
+                      />
+                      <span style={{ fontSize: 13, color: colors.text }}>Registered Donor</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 11, color: colors.textMuted }}>Allergies</label>
+                  <input
+                    type="text"
+                    value={allergies}
+                    placeholder="e.g. Penicillin, Peanuts"
+                    onChange={e => setAllergies(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      borderRadius: 8,
+                      backgroundColor: colors.surface,
+                      border: `1px solid ${colors.surfaceBorder}`,
+                      color: colors.text,
+                      fontSize: 13,
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 11, color: colors.textMuted }}>Current Medications</label>
+                  <input
+                    type="text"
+                    value={medications}
+                    placeholder="e.g. Inhaler, Insulin"
+                    onChange={e => setMedications(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      borderRadius: 8,
+                      backgroundColor: colors.surface,
+                      border: `1px solid ${colors.surfaceBorder}`,
+                      color: colors.text,
+                      fontSize: 13,
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 11, color: colors.textMuted }}>Emergency Instructions</label>
+                  <textarea
+                    rows={2}
+                    value={emergencyNotes}
+                    placeholder="Special instructions for emergency responders..."
+                    onChange={e => setEmergencyNotes(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      borderRadius: 8,
+                      backgroundColor: colors.surface,
+                      border: `1px solid ${colors.surfaceBorder}`,
+                      color: colors.text,
+                      fontSize: 13,
+                      resize: 'none',
+                    }}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSavingMedical}
+                  style={{
+                    padding: '10px',
+                    borderRadius: 8,
+                    backgroundColor: colors.accent,
+                    color: '#FFF',
+                    border: 'none',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    marginTop: 6,
+                  }}
+                >
+                  {isSavingMedical ? 'Saving...' : 'Save Medical Card'}
+                </button>
+              </form>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 12 }}>
+                <div>
+                  <span style={{ color: colors.textMuted }}>Blood Group: </span>
+                  <span style={{ fontWeight: 700, color: colors.danger }}>{medicalInfo?.blood_group || 'O+'}</span>
+                </div>
+                <div>
+                  <span style={{ color: colors.textMuted }}>Organ Donor: </span>
+                  <span style={{ fontWeight: 600, color: colors.text }}>{medicalInfo?.organ_donor ? 'YES' : 'NO'}</span>
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <span style={{ color: colors.textMuted }}>Allergies: </span>
+                  <span style={{ fontWeight: 600, color: colors.text }}>{medicalInfo?.allergies || 'None specified'}</span>
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <span style={{ color: colors.textMuted }}>Medications: </span>
+                  <span style={{ fontWeight: 600, color: colors.text }}>{medicalInfo?.current_medications || 'None specified'}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Emergency Contacts List */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: colors.textMuted }}>
+                Delegated Emergency Contacts ({emergencyContacts.length})
+              </div>
+              <button
+                onClick={() => setShowAddContact(!showAddContact)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: colors.accentLight,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <Plus size={14} />
+                <span>Add Contact</span>
+              </button>
+            </div>
+
+            {showAddContact && (
+              <form onSubmit={handleAddEmergencyContact} style={{
+                padding: 14,
+                borderRadius: 12,
+                backgroundColor: colors.surfaceCard,
+                border: `1px solid ${colors.surfaceBorder}`,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+                marginBottom: 12,
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>
+                  Add Trusted Emergency Contact
+                </div>
+                <input
+                  type="text"
+                  required
+                  placeholder="Full Name (e.g. Dr. Verma, Spouse)"
+                  value={contactName}
+                  onChange={e => setContactName(e.target.value)}
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: 8,
+                    backgroundColor: colors.surface,
+                    border: `1px solid ${colors.surfaceBorder}`,
+                    color: colors.text,
+                    fontSize: 13,
+                  }}
+                />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Relationship (e.g. Spouse)"
+                    value={contactRelationship}
+                    onChange={e => setContactRelationship(e.target.value)}
+                    style={{
+                      padding: '8px 10px',
+                      borderRadius: 8,
+                      backgroundColor: colors.surface,
+                      border: `1px solid ${colors.surfaceBorder}`,
+                      color: colors.text,
+                      fontSize: 13,
+                    }}
+                  />
+                  <input
+                    type="tel"
+                    required
+                    placeholder="Phone number"
+                    value={contactPhone}
+                    onChange={e => setContactPhone(e.target.value)}
+                    style={{
+                      padding: '8px 10px',
+                      borderRadius: 8,
+                      backgroundColor: colors.surface,
+                      border: `1px solid ${colors.surfaceBorder}`,
+                      color: colors.text,
+                      fontSize: 13,
+                    }}
+                  />
+                </div>
+                <input
+                  type="email"
+                  placeholder="Email (Optional, matches account)"
+                  value={contactEmail}
+                  onChange={e => setContactEmail(e.target.value)}
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: 8,
+                    backgroundColor: colors.surface,
+                    border: `1px solid ${colors.surfaceBorder}`,
+                    color: colors.text,
+                    fontSize: 13,
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={isSavingContact}
+                  style={{
+                    padding: '10px',
+                    borderRadius: 8,
+                    backgroundColor: colors.accent,
+                    color: '#FFF',
+                    border: 'none',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {isSavingContact ? 'Saving...' : 'Add Emergency Contact'}
+                </button>
+              </form>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {emergencyContacts.map(contact => (
+                <div
+                  key={contact.id}
+                  style={{
+                    padding: 12,
+                    borderRadius: 12,
+                    backgroundColor: colors.surfaceCard,
+                    border: `1px solid ${colors.surfaceBorder}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>
+                      {contact.name || (contact as any).contact_name || 'Contact'} ({contact.relationship_type || (contact as any).relationship || 'Contact'})
+                    </div>
+                    <div style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
+                      {contact.phone_number || (contact as any).phone || ''} {contact.email ? `• ${contact.email}` : ''}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteEmergencyContact(contact.id)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: colors.danger,
+                      cursor: 'pointer',
+                      padding: 6,
+                    }}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

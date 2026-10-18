@@ -1,0 +1,58 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: docuvault-backend
+
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+
+  data:
+    mongodb:
+      # Default to local MongoDB or MongoDB Atlas URI from environment variable
+      uri: ${MONGODB_URI:mongodb://localhost:27017/docuvault_db?serverSelectionTimeoutMS=2000&connectTimeoutMS=2000}
+      auto-index-creation: false
+
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+digivault:
+  jwt:
+    # 256-bit secret key for HMAC-SHA256
+    secret: ${JWT_SECRET:DocuVaultUltraSecureSpringSecurityJwtSecretKey2026AcademicProjectEngineeringMatrixXYZ}
+    expiration-ms: 86400000 # 24 hours
+    refresh-expiration-ms: 2592000000 # 30 days
+  storage:
+    type: ${STORAGE_TYPE:local} # "local" or "firebase"
+    upload-dir: ${STORAGE_DIR:./storage_uploads}
+    firebase:
+      bucket-name: ${FIREBASE_STORAGE_BUCKET:docuvault-app.appspot.com}
+      credentials-path: ${FIREBASE_CREDENTIALS_PATH:}
+  ocr:
+    service-url: ${OCR_SERVICE_URL:http://localhost:5001/extract-ocr}
+    fallback-enabled: true
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:*}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

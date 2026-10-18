@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  # =========================================================================
+  # DocuVault Production Stack (Academic & Architectural Specification)
+  # - Mobile: React Native Web / Vite
+  # - Core Backend: Java Spring Boot 2.7.x
+  # - Database: MongoDB Atlas / Local MongoDB 7.0
+  # - OCR Service: Python EasyOCR REST Microservice
+  # =========================================================================
+
+  mongodb:
+    image: mongo:7.0
+    container_name: docuvault_mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=docuvault_db
+    volumes:
+      - mongodb_data:/data/db
+
+  ocr-service:
+    build:
+      context: ./backend-spring-boot/ocr-service-python
+      dockerfile: Dockerfile
+    container_name: docuvault_ocr_service
+    restart: always
+    ports:
+      - "5001:5001"
+
+  backend-spring-boot:
+    build:
+      context: ./backend-spring-boot
+      dockerfile: Dockerfile
+    container_name: docuvault_spring_backend
+    restart: always
+    depends_on:
+      - mongodb
+      - ocr-service
+    environment:
+      - SPRING_DATA_MONGODB_URI=mongodb://mongodb:27017/docuvault_db
+      - OCR_SERVICE_URL=http://ocr-service:5001/extract-ocr
+      - JWT_SECRET=DocuVaultUltraSecureSpringSecurityJwtSecretKey2026AcademicProjectEngineeringMatrixXYZ
+      - STORAGE_DIR=/app/storage_uploads
+    ports:
+      - "8080:8080"
+    volumes:
+      - spring_storage:/app/storage_uploads
+
+  frontend:
+    build:
+      context: ./mobile
+      dockerfile: Dockerfile
+    container_name: docuvault_frontend
+    restart: always
+    depends_on:
+      - backend-spring-boot
+    ports:
+      - "5173:5173"
+
+volumes:
+  mongodb_data:
+  spring_storage:
