@@ -6,8 +6,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      'react-native': 'react-native-web',
-      'rollup': '@rollup/wasm-node'
+      'react-native': 'react-native-web'
     }
   },
   server: {
