@@ -9,7 +9,9 @@ interface AuthContextType {
   isLocked: boolean;
   biometricsEnabled: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (data: { email: string; full_name: string; password: string; phone_number?: string }) => Promise<void>;
+  register: (data: { email: string; full_name: string; password: string; phone_number?: string; otp?: string }) => Promise<void>;
+  sendOtp: (email: string, purpose?: string) => Promise<{ status: string; message: string; email_dispatched: boolean; dev_code?: string }>;
+  verifyOtp: (email: string, otp: string, purpose?: string) => Promise<{ status: string; message: string; verified: boolean }>;
   logout: () => void;
   unlockApp: (pin?: string) => Promise<boolean>;
   toggleBiometrics: (enabled: boolean) => void;
@@ -84,7 +86,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const register = async (data: { email: string; full_name: string; password: string; phone_number?: string }) => {
+  const register = async (data: { email: string; full_name: string; password: string; phone_number?: string; otp?: string }) => {
     setIsLoading(true);
     try {
       const res = await api.register(data);
@@ -93,6 +95,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const sendOtp = async (email: string, purpose?: string) => {
+    return api.sendOtp(email, purpose);
+  };
+
+  const verifyOtp = async (email: string, otp: string, purpose?: string) => {
+    return api.verifyOtp(email, otp, purpose);
   };
 
   const logout = () => {
@@ -172,6 +182,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       biometricsEnabled,
       login,
       register,
+      sendOtp,
+      verifyOtp,
       logout,
       unlockApp,
       toggleBiometrics,

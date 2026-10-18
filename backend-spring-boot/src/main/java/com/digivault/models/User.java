@@ -26,6 +26,7 @@ public class User {
     private String quickPinHash; // BCrypt hashed 4-digit PIN
     private boolean biometricEnabled = false;
     private String role = "ROLE_USER";
+    private boolean emailVerified = false;
 
     @CreatedDate
     private Date createdAt = new Date();
@@ -64,6 +65,9 @@ public class User {
 
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
+
+    public boolean isEmailVerified() { return emailVerified; }
+    public void setEmailVerified(boolean emailVerified) { this.emailVerified = emailVerified; }
 
     public Date getCreatedAt() { return createdAt; }
     public void setCreatedAt(Date createdAt) { this.createdAt = createdAt; }

@@ -9,6 +9,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+import com.digivault.models.EmailOtp;
+import com.digivault.repositories.EmailOtpRepository;
 import java.util.Optional;
 
 @Service
@@ -23,9 +27,21 @@ public class AuthService {
     @Autowired
     private JwtTokenProvider jwtTokenProvider;
 
+    @Autowired
+    private EmailService emailService;
+
+    @Autowired
+    private EmailOtpRepository emailOtpRepository;
+
     public TokenResponse register(RegisterRequest req) {
-        if (userRepository.existsByEmail(req.getEmail().toLowerCase().trim())) {
+        String email = req.getEmail().toLowerCase().trim();
+        if (userRepository.existsByEmail(email)) {
             throw new RuntimeException("Email address is already registered.");
+        }
+
+        // Verify OTP if provided
+        if (req.getOtp() != null && !req.getOtp().trim().isEmpty()) {
+            verifyOtp(email, req.getOtp(), "REGISTRATION");
         }
 
         User user = new User();
@@ -34,6 +50,7 @@ public class AuthService {
         user.setPhone(req.getPhone());
         user.setPassword(passwordEncoder.encode(req.getPassword()));
         user.setRole("ROLE_USER");
+        user.setEmailVerified(req.getOtp() != null && !req.getOtp().trim().isEmpty());
         user.setCreatedAt(new Date());
         user.setUpdatedAt(new Date());
 
@@ -126,6 +143,58 @@ public class AuthService {
         return true;
     }
 
+
+    public Map<String, Object> sendOtp(String rawEmail, String purpose) {
+        String email = rawEmail.toLowerCase().trim();
+        String targetPurpose = (purpose != null && !purpose.isEmpty()) ? purpose : "REGISTRATION";
+
+        if ("REGISTRATION".equalsIgnoreCase(targetPurpose) && userRepository.existsByEmail(email)) {
+            throw new RuntimeException("Email is already registered. Please sign in instead.");
+        }
+
+        String otp = emailService.generate6DigitOtp();
+        Date expiresAt = new Date(System.currentTimeMillis() + 10 * 60 * 1000); // 10 minutes
+
+        EmailOtp emailOtp = new EmailOtp(email, otp, targetPurpose, expiresAt);
+        emailOtpRepository.save(emailOtp);
+
+        boolean dispatched = emailService.sendOtpEmail(email, otp, targetPurpose);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("status", "success");
+        response.put("message", dispatched ? "Verification code sent to your email" : "Verification code generated (check server output / dev mode)");
+        response.put("email_dispatched", dispatched);
+        response.put("expires_in_seconds", 600);
+        if (!dispatched) {
+            response.put("dev_code", otp);
+        }
+        return response;
+    }
+
+    public boolean verifyOtp(String rawEmail, String rawOtp, String purpose) {
+        String email = rawEmail.toLowerCase().trim();
+        String otp = rawOtp != null ? rawOtp.trim() : "";
+        String targetPurpose = (purpose != null && !purpose.isEmpty()) ? purpose : "REGISTRATION";
+
+        Optional<EmailOtp> opt = emailOtpRepository.findTopByEmailAndPurposeAndUsedFalseOrderByCreatedAtDesc(email, targetPurpose);
+        if (!opt.isPresent()) {
+            throw new RuntimeException("No active verification code found for this email. Please request a new one.");
+        }
+
+        EmailOtp record = opt.get();
+        if (record.getExpiresAt() != null && record.getExpiresAt().before(new Date())) {
+            throw new RuntimeException("Verification code has expired. Please request a new code.");
+        }
+
+        if (!record.getOtp().equals(otp)) {
+            throw new RuntimeException("Invalid verification code. Please check and try again.");
+        }
+
+        record.setUsed(true);
+        emailOtpRepository.save(record);
+        return true;
+    }
+
     public UserSummary toUserSummary(User user) {
         UserSummary summary = new UserSummary();
         summary.setId(user.getId());
@@ -134,6 +203,7 @@ public class AuthService {
         summary.setPhone(user.getPhone());
         summary.setBiometricEnabled(user.isBiometricEnabled());
         summary.setHasQuickPin(user.getQuickPinHash() != null && !user.getQuickPinHash().isEmpty());
+        summary.setEmailVerified(user.isEmailVerified());
         return summary;
     }
 }

@@ -276,7 +276,21 @@ class ApiService {
   }
 
   // Auth APIs
-  async register(data: { email: string; full_name: string; password: string; phone_number?: string }) {
+  async sendOtp(email: string, purpose: string = 'REGISTRATION') {
+    return this.request<{ status: string; message: string; email_dispatched: boolean; dev_code?: string }>('/auth/send-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, purpose })
+    });
+  }
+
+  async verifyOtp(email: string, otp: string, purpose: string = 'REGISTRATION') {
+    return this.request<{ status: string; message: string; verified: boolean }>('/auth/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp, purpose })
+    });
+  }
+
+  async register(data: { email: string; full_name: string; password: string; phone_number?: string; otp?: string }) {
     const res = await this.request<{ access_token: string; refresh_token: string; user: User }>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(data)

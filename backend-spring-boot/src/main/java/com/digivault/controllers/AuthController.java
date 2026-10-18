@@ -31,6 +31,31 @@ public class AuthController {
         }
     }
 
+    @PostMapping("/send-otp")
+    public ResponseEntity<?> sendOtp(@Valid @RequestBody SendOtpRequest req) {
+        try {
+            Map<String, Object> resp = authService.sendOtp(req.getEmail(), req.getPurpose());
+            return ResponseEntity.ok(resp);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Collections.singletonMap("detail", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/verify-otp")
+    public ResponseEntity<?> verifyOtp(@Valid @RequestBody VerifyOtpRequest req) {
+        try {
+            boolean valid = authService.verifyOtp(req.getEmail(), req.getOtp(), req.getPurpose());
+            Map<String, Object> resp = new HashMap<>();
+            resp.put("status", "success");
+            resp.put("message", "Email verified successfully");
+            resp.put("verified", valid);
+            return ResponseEntity.ok(resp);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Collections.singletonMap("detail", e.getMessage()));
+        }
+    }
+
+
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest req) {
         try {
