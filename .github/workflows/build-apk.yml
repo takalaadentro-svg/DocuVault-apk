@@ -52,45 +52,17 @@ jobs:
 
       - name: Build Android Debug APK
         working-directory: mobile/android
-        run: |
-          ./gradlew :app:assembleDebug --stacktrace --no-daemon 2>&1 | tee ../../gradle-build.log
-
-      - name: Print Entire Gradle Log
-        if: always()
-        run: |
-          cat gradle-build.log
-
-      - name: Upload Debug Log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-debug-log
-          path: gradle-build.log
-
-      - name: Push Gradle Log to Git Branch
-        if: always()
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git checkout -B debug-log
-          git add -f gradle-build.log
-          git commit -m "Auto gradle log dump [skip ci]" || true
-          git push -f origin debug-log || true
+        run: ./gradlew :app:assembleDebug --stacktrace --no-daemon
 
       - name: Locate and Rename APK
         run: |
           mkdir -p build-output
           echo "Locating built APK..."
           find . -name "*.apk"
-          FIRST_APK=$(find . -name "*.apk" | head -n 1)
-          if [ -n "$FIRST_APK" ]; then
-            cp "$FIRST_APK" build-output/DocuVault-v1.0.0.apk
-            ls -lh build-output/
-          else
-            echo "No APK found, listing all build outputs:"
-            find mobile/android/app/build -type f || true
-            exit 1
-          fi
+          FIRST_APK=$(find . -name "*debug*.apk" -o -name "*.apk" | head -n 1)
+          echo "Selected APK: $FIRST_APK"
+          cp "$FIRST_APK" build-output/DocuVault-v1.0.0.apk
+          ls -lh build-output/
 
       - name: Upload Installable APK Artifact
         uses: actions/upload-artifact@v4
