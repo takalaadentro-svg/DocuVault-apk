@@ -13,7 +13,7 @@ spring:
   data:
     mongodb:
       # Default to local MongoDB or MongoDB Atlas URI from environment variable
-      uri: ${MONGODB_URI:mongodb://localhost:27017/docuvault_db?serverSelectionTimeoutMS=2000&connectTimeoutMS=2000}
+      uri: ${SPRING_DATA_MONGODB_URI:${MONGODB_URI:mongodb://localhost:27017/docuvault_db?serverSelectionTimeoutMS=2000&connectTimeoutMS=2000}}
       auto-index-creation: false
 
   servlet:
