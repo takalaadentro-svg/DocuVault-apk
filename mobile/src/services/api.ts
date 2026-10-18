@@ -7,7 +7,8 @@ import {
   DocumentVersion, PhoneTransferPairing
 } from '../types';
 
-const BASE_URL = (import.meta as any).env?.VITE_API_URL || '/api/v1';
+const BASE_URL = (import.meta as any).env?.VITE_API_URL || 
+  ((import.meta as any).env?.DEV ? '/api/v1' : 'https://docuvault-spring-backend.onrender.com/api/v1');
 
 const DEFAULT_DOCUMENTS: DocumentItem[] = [
   {
