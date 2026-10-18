@@ -60,8 +60,12 @@ jobs:
       - name: Locate and Rename APK
         run: |
           mkdir -p build-output
-          cp mobile/android/app/build/outputs/apk/debug/app-debug.apk build-output/DocuVault-v1.0.0.apk
-          ls -la build-output/
+          echo "Locating built APK..."
+          find mobile/android -name "*.apk"
+          FIRST_APK=$(find mobile/android -name "*.apk" | head -n 1)
+          echo "Selected APK: $FIRST_APK"
+          cp "$FIRST_APK" build-output/DocuVault-v1.0.0.apk
+          ls -lh build-output/
 
       - name: Upload Installable APK Artifact
         uses: actions/upload-artifact@v4
