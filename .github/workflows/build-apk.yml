@@ -64,15 +64,30 @@ jobs:
           name: gradle-debug-log
           path: gradle-build.log
 
+      - name: Push Gradle Log to Git Branch
+        if: always()
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git checkout -B debug-log
+          git add -f gradle-build.log
+          git commit -m "Auto gradle log dump" || true
+          git push -f origin debug-log || true
+
       - name: Locate and Rename APK
         run: |
           mkdir -p build-output
           echo "Locating built APK..."
           find . -name "*.apk"
           FIRST_APK=$(find . -name "*.apk" | head -n 1)
-          echo "Selected APK: $FIRST_APK"
-          cp "$FIRST_APK" build-output/DocuVault-v1.0.0.apk
-          ls -lh build-output/
+          if [ -n "$FIRST_APK" ]; then
+            cp "$FIRST_APK" build-output/DocuVault-v1.0.0.apk
+            ls -lh build-output/
+          else
+            echo "No APK found, listing all build outputs:"
+            find mobile/android/app/build -type f || true
+            exit 1
+          fi
 
       - name: Upload Installable APK Artifact
         uses: actions/upload-artifact@v4
