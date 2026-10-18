@@ -40,8 +40,6 @@ services:
   - type: web
     name: docuvault-frontend
     env: static
-    plan: free
-    region: oregon
     rootDir: mobile
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
