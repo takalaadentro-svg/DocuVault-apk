@@ -49,7 +49,13 @@ jobs:
 
       - name: Build Android Debug APK
         working-directory: mobile/android
-        run: ./gradlew assembleDebug --stacktrace
+        run: |
+          ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee ../../gradle-build.log
+
+      - name: Print Gradle Failure Log
+        if: failure()
+        run: |
+          tail -n 120 gradle-build.log
 
       - name: Locate and Rename APK
         run: |
