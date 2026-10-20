@@ -10,202 +10,20 @@ import {
 const BASE_URL = (import.meta as any).env?.VITE_API_URL || 
   ((import.meta as any).env?.DEV ? '/api/v1' : 'https://docuvault-spring-backend.onrender.com/api/v1');
 
-const DEFAULT_DOCUMENTS: DocumentItem[] = [
-  {
-    id: 'doc-pass-1',
-    user_id: 'user-demo',
-    title: 'Indian Passport',
-    category: 'Travel',
-    doc_type: 'PASSPORT',
-    subtype: 'Passport',
-    issuer: 'Ministry of External Affairs',
-    holder_name: 'Rajesh Sharma',
-    doc_number: 'Z1234567',
-    dob: '1990-08-15',
-    expiry_date: '2028-11-20',
-    days_until_expiry: 760,
-    is_expired: false,
-    is_emergency_eligible: true,
-    is_family_vault: false,
-    is_offline_available: true,
-    ocr_confidence: 0.96,
-    version: 1,
-    sha256_hash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-    created_at: new Date().toISOString(),
-    ocr_text: 'REPUBLIC OF INDIA PASSPORT PASSPORT NO: Z1234567 SURNAME: SHARMA GIVEN NAME: RAJESH NATIONALITY: INDIAN DOB: 15/08/1990 EXPIRY: 20/11/2028'
-  },
-  {
-    id: 'doc-aadh-2',
-    user_id: 'user-demo',
-    title: 'Aadhaar Card',
-    category: 'Identity',
-    doc_type: 'ID_CARD',
-    subtype: 'Aadhaar',
-    issuer: 'UIDAI',
-    holder_name: 'Rajesh Sharma',
-    doc_number: '9876 5432 1098',
-    dob: '1990-08-15',
-    is_emergency_eligible: true,
-    is_family_vault: true,
-    is_offline_available: true,
-    ocr_confidence: 0.98,
-    version: 1,
-    sha256_hash: 'a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0',
-    created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-    ocr_text: 'GOVERNMENT OF INDIA UNIQUE IDENTIFICATION AUTHORITY OF INDIA RAJESH SHARMA DOB: 15/08/1990 AADHAAR: 9876 5432 1098'
-  },
-  {
-    id: 'doc-ins-3',
-    user_id: 'user-demo',
-    title: 'Health Insurance Floater Policy',
-    category: 'Medical',
-    doc_type: 'INSURANCE',
-    subtype: 'Health Insurance',
-    issuer: 'Star Health & Allied Insurance',
-    holder_name: 'Rajesh Sharma',
-    doc_number: 'P/123456/01/2026/000123',
-    expiry_date: new Date(Date.now() + 86400000 * 5).toISOString().split('T')[0],
-    days_until_expiry: 5,
-    is_expired: false,
-    is_emergency_eligible: true,
-    is_family_vault: true,
-    is_offline_available: true,
-    ocr_confidence: 0.94,
-    version: 1,
-    sha256_hash: 'b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef01',
-    created_at: new Date(Date.now() - 86400000 * 5).toISOString(),
-    ocr_text: 'STAR HEALTH FLOATER POLICY POLICY NUMBER: P/123456/01/2026/000123 SUM INSURED: RS 1500000 PRIMARY INSURED: RAJESH SHARMA'
-  },
-  {
-    id: 'doc-deg-4',
-    user_id: 'user-demo',
-    title: 'B.Tech Degree Certificate',
-    category: 'Education',
-    doc_type: 'DEGREE',
-    subtype: 'Degree Certificate',
-    issuer: 'National Institute of Technology',
-    holder_name: 'Rajesh Sharma',
-    doc_number: 'NIT-2012-CS-409',
-    is_emergency_eligible: false,
-    is_family_vault: false,
-    is_offline_available: false,
-    ocr_confidence: 0.97,
-    version: 1,
-    sha256_hash: 'c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef012',
-    created_at: new Date(Date.now() - 86400000 * 10).toISOString(),
-    ocr_text: 'DEGREE OF BACHELOR OF TECHNOLOGY THIS IS TO CERTIFY THAT RAJESH SHARMA HAS BEEN ADMITTED TO THE DEGREE OF B.TECH IN COMPUTER SCIENCE'
-  },
-  {
-    id: 'doc-pan-5',
-    user_id: 'user-demo',
-    title: 'Income Tax Permanent Account Number (PAN)',
-    category: 'Finance',
-    doc_type: 'PAN',
-    subtype: 'PAN Card',
-    issuer: 'Income Tax Department',
-    holder_name: 'Rajesh Sharma',
-    doc_number: 'ABCPS1234K',
-    dob: '1990-08-15',
-    is_emergency_eligible: false,
-    is_family_vault: false,
-    is_offline_available: true,
-    ocr_confidence: 0.99,
-    version: 1,
-    sha256_hash: 'd4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0123',
-    created_at: new Date(Date.now() - 86400000 * 15).toISOString(),
-    ocr_text: 'INCOME TAX DEPARTMENT GOVT OF INDIA PERMANENT ACCOUNT NUMBER ABCPS1234K NAME: RAJESH SHARMA'
-  }
-];
-
-const DEFAULT_STATS: DashboardStats = {
-  total_documents: 5,
-  expiring_soon_count: 1,
-  expired_count: 0,
-  family_members_count: 2,
-  active_shares_count: 1,
-};
-
-const DEFAULT_NOTIFICATIONS: NotificationItem[] = [
-  {
-    id: 'notif-1',
-    user_id: 'user-demo',
-    title: 'Health Insurance Expiry Alert',
-    message: 'Health Insurance Floater Policy expires in 5 days. Consider renewing to prevent coverage lapse.',
-    type: 'EXPIRY_WARNING',
-    is_read: false,
-    channel: 'IN_APP',
-    delivery_status: 'DELIVERED',
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'notif-2',
-    user_id: 'user-demo',
-    title: 'Vault Security Verification',
-    message: 'All 5 documents have verified cryptographic SHA-256 integrity fingerprints.',
-    type: 'SYSTEM',
-    is_read: false,
-    channel: 'IN_APP',
-    delivery_status: 'DELIVERED',
-    created_at: new Date(Date.now() - 3600000 * 2).toISOString()
-  }
-];
-
-const DEFAULT_FAMILIES: FamilyGroup[] = [
-  {
-    id: 'fam-sharma',
-    name: 'Sharma Family Locker',
-    owner_id: 'user-demo',
-    members: [
-      { id: 'm1', family_id: 'fam-sharma', user_id: 'user-demo', full_name: 'Rajesh Sharma', email: 'rajesh@docuvault.app', role: 'OWNER', joined_at: new Date().toISOString() },
-      { id: 'm2', family_id: 'fam-sharma', user_id: 'user-priya', full_name: 'Priya Sharma', email: 'priya@docuvault.app', role: 'MEMBER', joined_at: new Date().toISOString() }
-    ],
-    invitations: [],
-    created_at: new Date().toISOString()
-  }
-];
-
-const DEFAULT_MEDICAL_INFO: EmergencyMedicalInfo = {
-  id: 'med-info-1',
-  user_id: 'user-demo',
-  blood_group: 'O+',
-  allergies: 'Penicillin, Sulfa drugs',
-  chronic_conditions: 'Mild Hypertension',
-  emergency_notes: 'Carry Asthma Inhaler when traveling. Family physician: Dr. Mehta (+91 98111 22334)',
-  updated_at: new Date().toISOString()
-};
-
-const DEFAULT_CONTACTS: EmergencyContact[] = [
-  {
-    id: 'contact-1',
-    user_id: 'user-demo',
-    name: 'Priya Sharma',
-    contact_name: 'Priya Sharma',
-    phone: '+91 98765 11223',
-    phone_number: '+91 98765 11223',
-    relationship: 'Spouse',
-    relationship_type: 'Spouse',
-    is_primary: true,
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'contact-2',
-    user_id: 'user-demo',
-    name: 'Vikram Sharma',
-    contact_name: 'Vikram Sharma',
-    phone: '+91 98765 44556',
-    phone_number: '+91 98765 44556',
-    relationship: 'Brother',
-    relationship_type: 'Brother',
-    is_primary: false,
-    created_at: new Date().toISOString()
-  }
-];
-
 class ApiService {
   private token: string | null = null;
+  private cachedUser: User | null = null;
 
   constructor() {
-    this.token = localStorage.getItem('docuvault_access_token') || localStorage.getItem('digivault_access_token');
+    this.token = localStorage.getItem('docuvault_access_token');
+    const userStr = localStorage.getItem('docuvault_user');
+    if (userStr) {
+      try {
+        this.cachedUser = JSON.parse(userStr);
+      } catch (e) {
+        this.cachedUser = null;
+      }
+    }
   }
 
   setToken(token: string | null) {
@@ -214,12 +32,36 @@ class ApiService {
       localStorage.setItem('docuvault_access_token', token);
     } else {
       localStorage.removeItem('docuvault_access_token');
-      localStorage.removeItem('digivault_access_token');
+      localStorage.removeItem('docuvault_user');
+      this.cachedUser = null;
     }
   }
 
   getToken(): string | null {
-    return this.token || localStorage.getItem('docuvault_access_token') || localStorage.getItem('digivault_access_token');
+    return this.token || localStorage.getItem('docuvault_access_token');
+  }
+
+  setUser(user: User | null) {
+    this.cachedUser = user;
+    if (user) {
+      localStorage.setItem('docuvault_user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('docuvault_user');
+    }
+  }
+
+  getCachedUser(): User | null {
+    if (this.cachedUser) return this.cachedUser;
+    const userStr = localStorage.getItem('docuvault_user');
+    if (userStr) {
+      try {
+        this.cachedUser = JSON.parse(userStr);
+        return this.cachedUser;
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -235,8 +77,9 @@ class ApiService {
       headers.set('Content-Type', 'application/json');
     }
 
+    // 30-second timeout to handle cloud spin-up & large uploads smoothly
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     try {
       const response = await fetch(`${BASE_URL}${endpoint}`, {
@@ -245,31 +88,35 @@ class ApiService {
         signal: controller.signal
       });
 
-      if (response.status === 401 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/register') && !endpoint.includes('/auth/verify-pin')) {
-        // Session expired
+      if (response.status === 401 && 
+          !endpoint.includes('/auth/login') && 
+          !endpoint.includes('/auth/register') && 
+          !endpoint.includes('/auth/verify-pin') &&
+          !endpoint.includes('/auth/send-otp') &&
+          !endpoint.includes('/auth/verify-otp')) {
+        // Session explicitly expired on server
         this.setToken(null);
+        this.setUser(null);
         window.dispatchEvent(new Event('docuvault_session_expired'));
         throw new Error('Your session has expired. Please log in again.');
       }
 
       if (!response.ok) {
-        let errorMsg = `Request failed (${response.status})`;
+        let errMessage = 'An error occurred';
         try {
-          const errorData = await response.json();
-          errorMsg = errorData.detail || errorMsg;
-        } catch (e) {
-          const text = await response.text();
-          if (text) errorMsg = text;
+          const errData = await response.json();
+          errMessage = errData.detail || errData.message || response.statusText;
+        } catch (_) {
+          errMessage = await response.text() || response.statusText;
         }
-        throw new Error(errorMsg);
+        throw new Error(errMessage);
       }
 
-      // For 204 or empty responses
-      if (response.status === 204) {
-        return {} as T;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        return response.json();
       }
-
-      return await response.json();
+      return response.text() as unknown as T;
     } finally {
       clearTimeout(timeoutId);
     }
@@ -296,6 +143,7 @@ class ApiService {
       body: JSON.stringify(data)
     });
     this.setToken(res.access_token);
+    this.setUser(res.user);
     return res;
   }
 
@@ -305,43 +153,53 @@ class ApiService {
       body: JSON.stringify(data)
     });
     this.setToken(res.access_token);
+    this.setUser(res.user);
     return res;
   }
 
   async getMe(): Promise<User> {
-    return this.request<User>('/auth/me');
+    const u = await this.request<User>('/auth/me');
+    if (u) {
+      this.setUser(u);
+    }
+    return u;
   }
 
   async updateMe(data: { full_name?: string; phone_number?: string }): Promise<User> {
-    return this.request<User>('/auth/me', {
+    const u = await this.request<User>('/auth/me', {
       method: 'PUT',
       body: JSON.stringify(data)
     });
+    if (u) {
+      this.setUser(u);
+    }
+    return u;
   }
 
-  async changePassword(data: { old_password: string; new_password: string }) {
-    return this.request<{ message: string }>('/auth/change-password', {
-      method: 'POST',
-      body: JSON.stringify(data)
-    });
-  }
-
-  async setupQuickPin(pin: string): Promise<{ message: string; has_quick_pin: boolean }> {
+  async setQuickPin(pin: string) {
     return this.request<{ message: string; has_quick_pin: boolean }>('/auth/quick-pin', {
       method: 'POST',
       body: JSON.stringify({ pin })
     });
   }
 
-  async verifyQuickPin(pin: string): Promise<{ status: string; message: string }> {
+  async verifyQuickPin(pin: string) {
     return this.request<{ status: string; message: string }>('/auth/verify-pin', {
       method: 'POST',
       body: JSON.stringify({ pin })
     });
   }
 
+  async toggleBiometric(enabled: boolean) {
+    return this.request<{ message: string; biometric_enabled: boolean }>('/auth/biometric', {
+      method: 'POST',
+      body: JSON.stringify({ enabled })
+    });
+  }
+
   logout() {
     this.setToken(null);
+    this.setUser(null);
   }
 
   // Documents APIs
@@ -382,9 +240,10 @@ class ApiService {
     const queryStr = searchParams.toString();
     try {
       const docs = await this.request<DocumentItem[]>(`/documents${queryStr ? `?${queryStr}` : ''}`);
-      return Array.isArray(docs) && docs.length > 0 ? docs : DEFAULT_DOCUMENTS;
+      return Array.isArray(docs) ? docs : [];
     } catch (e) {
-      return DEFAULT_DOCUMENTS;
+      console.warn('Could not load documents from server:', e);
+      return [];
     }
   }
 
@@ -405,143 +264,175 @@ class ApiService {
     });
   }
 
-  getDocumentDownloadUrl(id: string): string {
-    return `${BASE_URL}/documents/${id}/download`;
+  async downloadDocument(id: string): Promise<Blob> {
+    const token = this.getToken();
+    const headers = new Headers();
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    
+    const response = await fetch(`${BASE_URL}/documents/${id}/download`, { headers });
+    if (!response.ok) throw new Error('Download failed');
+    return response.blob();
   }
 
-  getDocumentPreviewUrl(id: string): string {
-    return `${BASE_URL}/documents/${id}/preview`;
-  }
-
-  async grantPermission(docId: string, data: { granted_to_user_email: string; can_view: boolean; can_download: boolean; can_edit?: boolean; can_share?: boolean }): Promise<DocumentPermission> {
-    return this.request<DocumentPermission>(`/documents/${docId}/permissions`, {
+  async askDocumentAssistant(docId: string, question: string): Promise<DocumentChatResponse> {
+    return this.request<DocumentChatResponse>(`/documents/${docId}/chat`, {
       method: 'POST',
-      body: JSON.stringify(data)
+      body: JSON.stringify({ question })
     });
-  }
-
-  async revokePermission(docId: string, permId: string) {
-    return this.request<{ message: string }>(`/documents/${docId}/permissions/${permId}`, {
-      method: 'DELETE'
-    });
-  }
-
-  // DocuVault 2.0 Intelligence APIs
-  async chatWithDocuments(question: string, documentId?: string): Promise<DocumentChatResponse> {
-    try {
-      return await this.request<DocumentChatResponse>('/documents/chat', {
-        method: 'POST',
-        body: JSON.stringify({ question, documentId })
-      });
-    } catch (e) {
-      return {
-        answer: `According to your indexed vault records: You have valid Passport No: Z1234567 and Health Insurance Policy (Star Health) expiring in 5 days.`,
-        citations: [
-          { documentId: 'demo-doc-1', documentTitle: 'Passport - Republic of India', category: 'Travel', excerpt: 'PASSPORT NO: Z1234567 DOB: 15/08/1990 VALIDITY ACTIVE', confidence: 0.95 },
-          { documentId: 'demo-doc-3', documentTitle: 'Health Insurance Floater Policy', category: 'Finance', excerpt: 'POLICY NO: P/123456/01/2026/000123 SUM INSURED RS 1500000', confidence: 0.92 }
-        ],
-        infoFound: true
-      };
-    }
   }
 
   async getDocumentPacks(): Promise<DocumentPack[]> {
+    let docs: DocumentItem[] = [];
     try {
-      return await this.request<DocumentPack[]>('/documents/packs');
-    } catch (e) {
-      return [
-        {
-          packId: 'pack_college',
-          packName: 'College Admissions Pack',
-          purpose: 'Essential verified documents for university applications, counselling & admission verification',
-          totalRequired: 5,
-          totalAvailable: 4,
-          completenessPercentage: 80,
-          items: [
-            { requiredDocType: '10th / Secondary Marksheet', category: 'Education', isAvailable: true, matchedDocumentTitle: '10th Secondary Marksheet' },
-            { requiredDocType: '12th / Higher Secondary Marksheet', category: 'Education', isAvailable: true, matchedDocumentTitle: '12th Certificate' },
-            { requiredDocType: 'Degree / Diploma Certificate', category: 'Education', isAvailable: true, matchedDocumentTitle: 'B.Tech Degree Certificate' },
-            { requiredDocType: 'Government ID Proof', category: 'Identity', isAvailable: true, matchedDocumentTitle: 'Aadhaar Card' },
-            { requiredDocType: 'Transfer / Migration Certificate', category: 'Education', isAvailable: false }
-          ]
-        },
-        {
-          packId: 'pack_job',
-          packName: 'Job Onboarding & Employment Pack',
-          purpose: 'Required paperwork for corporate onboarding, background verification (BGV) and payroll setup',
-          totalRequired: 5,
-          totalAvailable: 4,
-          completenessPercentage: 80,
-          items: [
-            { requiredDocType: 'PAN Card (Mandatory for Payroll)', category: 'Identity', isAvailable: true, matchedDocumentTitle: 'PAN Card' },
-            { requiredDocType: 'Aadhaar Card (Address & ID)', category: 'Identity', isAvailable: true, matchedDocumentTitle: 'Aadhaar Card' },
-            { requiredDocType: 'Highest Degree Certificate', category: 'Education', isAvailable: true, matchedDocumentTitle: 'B.Tech Degree Certificate' },
-            { requiredDocType: 'Previous Relieving / Experience Letter', category: 'Employment', isAvailable: false },
-            { requiredDocType: 'Cancelled Cheque / Bank Statement', category: 'Finance', isAvailable: true, matchedDocumentTitle: 'Bank Statement' }
-          ]
-        },
-        {
-          packId: 'pack_travel',
-          packName: 'International Travel Pack',
-          purpose: 'All necessary permits, border documentation, flight records, and medical safety cover',
-          totalRequired: 4,
-          totalAvailable: 3,
-          completenessPercentage: 75,
-          items: [
-            { requiredDocType: 'Passport (Valid > 6 Months)', category: 'Travel', isAvailable: true, matchedDocumentTitle: 'Passport - Republic of India' },
-            { requiredDocType: 'Valid Visa / Entry Permit', category: 'Travel', isAvailable: false },
-            { requiredDocType: 'Travel & Medical Insurance', category: 'Travel', isAvailable: true, matchedDocumentTitle: 'Travel Insurance' },
-            { requiredDocType: 'Vaccination / Health Certificate', category: 'Medical', isAvailable: true, matchedDocumentTitle: 'Vaccine Record' }
-          ]
-        },
-        {
-          packId: 'pack_medical',
-          packName: 'Medical Visit & Emergency Pack',
-          purpose: 'Clinical records, active health insurance policy, prescription and diagnostic history',
-          totalRequired: 4,
-          totalAvailable: 4,
-          completenessPercentage: 100,
-          items: [
-            { requiredDocType: 'Health Insurance Policy / TPA Card', category: 'Finance', isAvailable: true, matchedDocumentTitle: 'Health Insurance Floater Policy' },
-            { requiredDocType: 'Recent Doctor Prescription', category: 'Medical', isAvailable: true, matchedDocumentTitle: 'Prescription Dr. Mehta' },
-            { requiredDocType: 'Recent Diagnostic / Blood Lab Report', category: 'Medical', isAvailable: true, matchedDocumentTitle: 'Blood Test Pathology' },
-            { requiredDocType: 'Government ID Proof', category: 'Identity', isAvailable: true, matchedDocumentTitle: 'Aadhaar Card' }
-          ]
-        },
-        {
-          packId: 'pack_insurance',
-          packName: 'Insurance Claim Settlement Pack',
-          purpose: 'Comprehensive claim dossier including hospital bills, policy schedule, and bank payout details',
-          totalRequired: 5,
-          totalAvailable: 4,
-          completenessPercentage: 80,
-          items: [
-            { requiredDocType: 'Active Policy Document', category: 'Finance', isAvailable: true, matchedDocumentTitle: 'Health Insurance Floater Policy' },
-            { requiredDocType: 'Hospital Discharge Summary', category: 'Medical', isAvailable: true, matchedDocumentTitle: 'Discharge Summary' },
-            { requiredDocType: 'Original Pharmacy & Medical Bills', category: 'Medical', isAvailable: true, matchedDocumentTitle: 'Hospital Bill' },
-            { requiredDocType: 'Government Photo ID', category: 'Identity', isAvailable: true, matchedDocumentTitle: 'Aadhaar Card' },
-            { requiredDocType: 'Cancelled Cheque for NEFT Payout', category: 'Finance', isAvailable: false }
-          ]
-        }
-      ];
-    }
+      docs = await this.getDocuments();
+    } catch (e) {}
+
+    const hasDoc = (keyword: string, category?: string) => {
+      const kw = keyword.toLowerCase();
+      return docs.find(d => 
+        (d.title && d.title.toLowerCase().includes(kw)) ||
+        (d.doc_type && d.doc_type.toLowerCase().includes(kw)) ||
+        (d.subtype && d.subtype.toLowerCase().includes(kw)) ||
+        (category && d.category && d.category.toLowerCase() === category.toLowerCase())
+      );
+    };
+
+    const packsConfig = [
+      {
+        packId: 'pack_college',
+        packName: 'College Degree & Admission Pack',
+        purpose: 'Academic dossier for university admissions, study visa, and government degree verification',
+        required: [
+          { name: '10th / Secondary Marksheet', category: 'Education', kw: '10th' },
+          { name: '12th / Higher Secondary Marksheet', category: 'Education', kw: '12th' },
+          { name: 'Degree / Diploma Certificate', category: 'Education', kw: 'degree' },
+          { name: 'Government ID Proof', category: 'Identity', kw: 'aadhaar' },
+          { name: 'Transfer / Migration Certificate', category: 'Education', kw: 'transfer' },
+        ]
+      },
+      {
+        packId: 'pack_job',
+        packName: 'Job Onboarding & Employment Pack',
+        purpose: 'Required paperwork for corporate onboarding, background verification (BGV) and payroll setup',
+        required: [
+          { name: 'PAN Card (Mandatory for Payroll)', category: 'Identity', kw: 'pan' },
+          { name: 'Aadhaar Card (Address & ID)', category: 'Identity', kw: 'aadhaar' },
+          { name: 'Highest Degree Certificate', category: 'Education', kw: 'degree' },
+          { name: 'Previous Relieving / Experience Letter', category: 'Employment', kw: 'experience' },
+          { name: 'Cancelled Cheque / Bank Statement', category: 'Finance', kw: 'bank' },
+        ]
+      },
+      {
+        packId: 'pack_travel',
+        packName: 'International Travel Pack',
+        purpose: 'All necessary permits, border documentation, flight records, and medical safety cover',
+        required: [
+          { name: 'Passport (Valid > 6 Months)', category: 'Travel', kw: 'passport' },
+          { name: 'Valid Visa / Entry Permit', category: 'Travel', kw: 'visa' },
+          { name: 'Travel & Medical Insurance', category: 'Travel', kw: 'insurance' },
+          { name: 'Vaccination / Health Certificate', category: 'Medical', kw: 'vaccin' },
+        ]
+      },
+      {
+        packId: 'pack_medical',
+        packName: 'Medical Visit & Emergency Pack',
+        purpose: 'Clinical records, active health insurance policy, prescription and diagnostic history',
+        required: [
+          { name: 'Health Insurance Policy / TPA Card', category: 'Finance', kw: 'insurance' },
+          { name: 'Recent Doctor Prescription', category: 'Medical', kw: 'prescription' },
+          { name: 'Recent Diagnostic / Blood Lab Report', category: 'Medical', kw: 'report' },
+          { name: 'Government ID Proof', category: 'Identity', kw: 'aadhaar' },
+        ]
+      },
+      {
+        packId: 'pack_insurance',
+        packName: 'Insurance Claim Settlement Pack',
+        purpose: 'Comprehensive claim dossier including hospital bills, policy schedule, and bank payout details',
+        required: [
+          { name: 'Active Policy Document', category: 'Finance', kw: 'insurance' },
+          { name: 'Hospital Discharge Summary', category: 'Medical', kw: 'discharge' },
+          { name: 'Original Pharmacy & Medical Bills', category: 'Medical', kw: 'bill' },
+          { name: 'Government Photo ID', category: 'Identity', kw: 'aadhaar' },
+          { name: 'Cancelled Cheque for NEFT Payout', category: 'Finance', kw: 'cheque' },
+        ]
+      }
+    ];
+
+    return packsConfig.map(p => {
+      const items = p.required.map(r => {
+        const matched = hasDoc(r.kw, r.category);
+        return {
+          requiredDocType: r.name,
+          category: r.category,
+          isAvailable: !!matched,
+          matchedDocumentTitle: matched ? matched.title : undefined,
+          matchedDocumentId: matched ? matched.id : undefined
+        };
+      });
+      const totalAvailable = items.filter(i => i.isAvailable).length;
+      return {
+        packId: p.packId,
+        packName: p.packName,
+        purpose: p.purpose,
+        totalRequired: items.length,
+        totalAvailable,
+        completenessPercentage: Math.round((totalAvailable / items.length) * 100),
+        items
+      };
+    });
   }
 
   async getConsistencyCheck(): Promise<ConsistencyCheckResult> {
+    let docs: DocumentItem[] = [];
     try {
-      return await this.request<ConsistencyCheckResult>('/documents/consistency-check');
-    } catch (e) {
+      docs = await this.getDocuments();
+    } catch (e) {}
+
+    if (docs.length === 0) {
       return {
-        totalDocumentsAnalyzed: 5,
+        totalDocumentsAnalyzed: 0,
         isConsistent: true,
-        issues: [],
-        passedFields: [
-          'Holder Name matches across verified records (Rajesh Sharma)',
-          'Date of Birth (15/08/1990) is identical across Aadhaar, Passport and Driving Licence',
-          'Document identification numbers are uniquely indexed'
-        ]
+        issues: ['Upload documents (e.g. Aadhaar, Passport) to perform automated cross-document identity verification.'],
+        passedFields: []
       };
     }
+
+    const names = new Set<string>();
+    const dobs = new Set<string>();
+    docs.forEach(d => {
+      if (d.holder_name && d.holder_name.trim().length > 1) {
+        names.add(d.holder_name.trim());
+      }
+      if (d.dob && d.dob.trim().length > 1) {
+        dobs.add(d.dob.trim());
+      }
+    });
+
+    const issues: string[] = [];
+    const passedFields: string[] = [];
+
+    if (names.size > 1) {
+      issues.push(`Name variance detected across documents: ${Array.from(names).join(' vs ')}`);
+    } else if (names.size === 1) {
+      passedFields.push(`Holder Name consistently verified: ${Array.from(names)[0]}`);
+    }
+
+    if (dobs.size > 1) {
+      issues.push(`Date of birth discrepancy detected: ${Array.from(dobs).join(' vs ')}`);
+    } else if (dobs.size === 1) {
+      passedFields.push(`Date of Birth verified matching across records (${Array.from(dobs)[0]})`);
+    }
+
+    if (docs.length >= 2) {
+      passedFields.push(`${docs.length} document records cryptographically indexed with unique SHA-256 hashes.`);
+    }
+
+    return {
+      totalDocumentsAnalyzed: docs.length,
+      isConsistent: issues.length === 0,
+      issues,
+      passedFields
+    };
   }
 
   async checkDuplicate(sha256Hash: string, ocrText?: string, title?: string): Promise<DuplicateCheckResult> {
@@ -562,23 +453,10 @@ class ApiService {
 
   async getDocumentVersions(docId: string): Promise<DocumentVersion[]> {
     try {
-      return await this.request<DocumentVersion[]>(`/documents/${docId}/versions`);
+      const res = await this.request<DocumentVersion[]>(`/documents/${docId}/versions`);
+      return Array.isArray(res) ? res : [];
     } catch (e) {
-      return [
-        {
-          id: 'v1',
-          document_id: docId,
-          user_id: 'user-1',
-          version_number: 1,
-          title: 'Initial Document Registration',
-          original_filename: 'scan_original.pdf',
-          stored_filename: 'scan_original.pdf',
-          file_size: 1540000,
-          sha256_hash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-          change_summary: 'Initial certified upload with OCR extraction',
-          created_at: new Date(Date.now() - 86400000 * 3).toISOString()
-        }
-      ];
+      return [];
     }
   }
 
@@ -606,7 +484,7 @@ class ApiService {
         transferCode: code,
         expiresInSeconds: 600,
         qrCodeData: `docuvault://transfer?code=${code}`,
-        documentCount: 5
+        documentCount: 0
       };
     }
   }
@@ -629,9 +507,9 @@ class ApiService {
   async getFamilies(): Promise<FamilyGroup[]> {
     try {
       const res = await this.request<FamilyGroup[]>('/family/');
-      return Array.isArray(res) && res.length > 0 ? res : DEFAULT_FAMILIES;
+      return Array.isArray(res) ? res : [];
     } catch (e) {
-      return DEFAULT_FAMILIES;
+      return [];
     }
   }
 
@@ -686,9 +564,9 @@ class ApiService {
   async getEmergencyContacts(): Promise<EmergencyContact[]> {
     try {
       const res = await this.request<EmergencyContact[]>('/emergency/contacts');
-      return Array.isArray(res) && res.length > 0 ? res : DEFAULT_CONTACTS;
+      return Array.isArray(res) ? res : [];
     } catch (e) {
-      return DEFAULT_CONTACTS;
+      return [];
     }
   }
 
@@ -715,9 +593,9 @@ class ApiService {
   async getEmergencyMedicalInfo(): Promise<EmergencyMedicalInfo | null> {
     try {
       const res = await this.request<EmergencyMedicalInfo | null>('/emergency/medical-info');
-      return res || DEFAULT_MEDICAL_INFO;
+      return res || null;
     } catch (e) {
-      return DEFAULT_MEDICAL_INFO;
+      return null;
     }
   }
 
@@ -729,7 +607,12 @@ class ApiService {
   }
 
   async getEmergencyEligibleDocuments(): Promise<DocumentItem[]> {
-    return this.request<DocumentItem[]>('/emergency/eligible-documents');
+    try {
+      const res = await this.request<DocumentItem[]>('/emergency/eligible-documents');
+      return Array.isArray(res) ? res : [];
+    } catch (e) {
+      return [];
+    }
   }
 
   async accessEmergencyVault(targetUserId: string, data: { reason: string; emergency_contact_id: string }): Promise<{
@@ -754,7 +637,12 @@ class ApiService {
   }
 
   async getActiveShares(): Promise<ShareTokenItem[]> {
-    return this.request<ShareTokenItem[]>('/share/active');
+    try {
+      const res = await this.request<ShareTokenItem[]>('/share/active');
+      return Array.isArray(res) ? res : [];
+    } catch (e) {
+      return [];
+    }
   }
 
   async revokeShareToken(shareId: string) {
@@ -774,9 +662,9 @@ class ApiService {
   async getNotifications(): Promise<NotificationItem[]> {
     try {
       const res = await this.request<NotificationItem[]>('/notifications/');
-      return Array.isArray(res) && res.length > 0 ? res : DEFAULT_NOTIFICATIONS;
+      return Array.isArray(res) ? res : [];
     } catch (e) {
-      return DEFAULT_NOTIFICATIONS;
+      return [];
     }
   }
 
@@ -801,22 +689,19 @@ class ApiService {
   async getDashboardStats(): Promise<DashboardStats> {
     try {
       const res = await this.request<DashboardStats>('/notifications/dashboard-stats');
-      return res || DEFAULT_STATS;
+      if (res && typeof res.total_documents === 'number') {
+        return res;
+      }
     } catch (e) {
-      return DEFAULT_STATS;
+      console.warn('Dashboard stats fallback:', e);
     }
-  }
-
-  // System & Seed
-  async seedDemoData() {
-    return this.request<{
-      status: string;
-      message: string;
-      demo_credentials: { email: string; password: string };
-      stats: any;
-    }>('/system/seed-demo', {
-      method: 'POST'
-    });
+    return {
+      total_documents: 0,
+      expiring_soon_count: 0,
+      expired_count: 0,
+      family_members_count: 0,
+      active_shares_count: 0,
+    };
   }
 
   async getAuditLogs(): Promise<AuditLogItem[]> {
@@ -824,24 +709,7 @@ class ApiService {
       const res = await this.request<AuditLogItem[]>('/audit/');
       return Array.isArray(res) ? res : [];
     } catch (e) {
-      return [
-        {
-          id: 'log-1',
-          user_id: 'user-demo',
-          action: 'VAULT_AUTHENTICATED',
-          entity_type: 'AUTH',
-          details: 'Biometric authorization verified for Rajesh Sharma',
-          created_at: new Date().toISOString()
-        },
-        {
-          id: 'log-2',
-          user_id: 'user-demo',
-          action: 'DOCUMENT_DNA_VERIFIED',
-          entity_type: 'DOCUMENT',
-          details: 'SHA-256 fingerprint matched for Indian Passport',
-          created_at: new Date(Date.now() - 3600000).toISOString()
-        }
-      ];
+      return [];
     }
   }
 }

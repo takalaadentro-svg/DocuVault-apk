@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Lock, Mail, User, Phone, ArrowRight, AlertCircle, Sparkles, CheckCircle, ArrowLeft, RefreshCw, KeyRound } from 'lucide-react';
+import { ShieldCheck, Lock, Mail, User, Phone, ArrowRight, AlertCircle, CheckCircle, ArrowLeft, RefreshCw, KeyRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
 export const AuthScreen: React.FC = () => {
-  const { login, register, sendOtp, loadDemoAccount } = useAuth();
+  const { login, register, sendOtp } = useAuth();
   const { colors } = useTheme();
 
   const [isRegister, setIsRegister] = useState(false);
@@ -135,17 +135,7 @@ export const AuthScreen: React.FC = () => {
     }
   };
 
-  const handleQuickDemo = async () => {
-    setIsLoading(true);
-    setErrorMessage(null);
-    try {
-      await loadDemoAccount();
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to initialize demo account');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+
 
   const toggleMode = (registerMode: boolean) => {
     setIsRegister(registerMode);
@@ -205,33 +195,7 @@ export const AuthScreen: React.FC = () => {
           </p>
         </div>
 
-        {/* Quick Demo Access Button */}
-        {!isRegister && (
-          <button
-            onClick={handleQuickDemo}
-            disabled={isLoading}
-            style={{
-              width: '100%',
-              padding: '12px 16px',
-              borderRadius: 14,
-              backgroundColor: 'rgba(59, 130, 246, 0.12)',
-              border: '1px solid rgba(59, 130, 246, 0.35)',
-              color: '#3B82F6',
-              fontSize: 13,
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              cursor: isLoading ? 'not-allowed' : 'pointer',
-              marginBottom: 20,
-              transition: 'all 0.2s',
-            }}
-          >
-            <Sparkles size={16} />
-            <span>✨ Instant Demo Access (Preloaded Vault)</span>
-          </button>
-        )}
+
 
         {/* Section Divider */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>

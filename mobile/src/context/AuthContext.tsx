@@ -15,18 +15,29 @@ interface AuthContextType {
   logout: () => void;
   unlockApp: (pin?: string) => Promise<boolean>;
   toggleBiometrics: (enabled: boolean) => void;
-  loadDemoAccount: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // Immediately restore the user from local storage so the session persists across app restarts!
+  const [user, setUser] = useState<User | null>(() => {
+    const token = api.getToken();
+    return token ? api.getCachedUser() : null;
+  });
+
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    const token = api.getToken();
+    const cached = api.getCachedUser();
+    // If we already have token and cached user, app loads instantly without loading screen
+    return !(token && cached);
+  });
+
   const [biometricsEnabled, setBiometricsEnabled] = useState<boolean>(() => {
     return localStorage.getItem('docuvault_biometrics') === 'true' || localStorage.getItem('digivault_biometrics') === 'true';
   });
+
   const [isLocked, setIsLocked] = useState<boolean>(() => {
     return localStorage.getItem('docuvault_biometrics') === 'true' || localStorage.getItem('digivault_biometrics') === 'true';
   });
@@ -40,25 +51,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
+      // 15s timeout for Render backend cold-starts
       const timeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('Auth check timed out')), 2000)
+        setTimeout(() => reject(new Error('Auth check timed out')), 15000)
       );
       const userData = await Promise.race([api.getMe(), timeoutPromise]);
       setUser(userData);
-    } catch (e) {
-      console.warn('Session verification failed or timed out:', e);
-      api.setToken(null);
-      setUser(null);
+      api.setUser(userData);
+    } catch (e: any) {
+      const errMsg = e?.message || '';
+      // Only log out if token was rejected as unauthorized (401)
+      if (errMsg.includes('401') || errMsg.includes('expired') || errMsg.includes('Unauthorized')) {
+        console.warn('Session explicitly expired or invalid, logging out:', e);
+        api.setToken(null);
+        api.setUser(null);
+        setUser(null);
+      } else {
+        console.info('Server offline, sleeping, or network delay; retaining persistent logged-in session.');
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    // Failsafe timer: ensures app never hangs on initialization screen
     const safetyTimer = setTimeout(() => {
       setIsLoading(false);
-    }, 2500);
+    }, 3000);
 
     checkAuth();
 
@@ -67,11 +86,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     window.addEventListener('docuvault_session_expired', handleSessionExpired);
-    window.addEventListener('digivault_session_expired', handleSessionExpired);
     return () => {
       clearTimeout(safetyTimer);
       window.removeEventListener('docuvault_session_expired', handleSessionExpired);
-      window.removeEventListener('digivault_session_expired', handleSessionExpired);
     };
   }, []);
 
@@ -80,6 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await api.login({ email, password });
       setUser(res.user);
+      api.setUser(res.user);
       setIsLocked(false);
     } finally {
       setIsLoading(false);
@@ -91,6 +109,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await api.register(data);
       setUser(res.user);
+      api.setUser(res.user);
       setIsLocked(false);
     } finally {
       setIsLoading(false);
@@ -121,10 +140,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLocked(false);
       return true;
     } catch {
-      if (pin === "1234") {
-        setIsLocked(false);
-        return true;
-      }
       return false;
     }
   };
@@ -134,42 +149,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('docuvault_biometrics', String(enabled));
   };
 
-  const loadDemoAccount = async () => {
-    setIsLoading(true);
-    try {
-      try {
-        await api.seedDemoData();
-      } catch (e) {
-        console.warn('Backend seed endpoint not reached, proceeding to demo login', e);
-      }
-      try {
-        await login('demo@docuvault.app', 'Password123!');
-      } catch (e) {
-        await login('demo@digivault.app', 'Password123!');
-      }
-    } catch (err) {
-      console.warn('Backend demo login error, using local demo session:', err);
-      const fallbackDemoUser: User = {
-        id: 'demo-user-id',
-        email: 'demo@docuvault.app',
-        full_name: 'Rajesh Sharma',
-        phone_number: '+91 98765 43210',
-        has_quick_pin: true,
-        biometric_enabled: true,
-        created_at: new Date().toISOString()
-      };
-      setUser(fallbackDemoUser);
-      setIsLocked(false);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const refreshProfile = async () => {
     if (!api.getToken()) return;
     try {
       const u = await api.getMe();
       setUser(u);
+      api.setUser(u);
     } catch (e) {}
   };
 
@@ -187,7 +172,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       logout,
       unlockApp,
       toggleBiometrics,
-      loadDemoAccount,
       refreshProfile
     }}>
       {children}

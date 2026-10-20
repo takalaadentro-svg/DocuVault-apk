@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   User, Shield, Moon, Sun, Fingerprint, Lock, 
-  RotateCcw, LogOut, KeyRound, Sparkles, Check, AlertCircle, FileText,
+  LogOut, KeyRound, Check, AlertCircle, FileText,
   Bell, Smartphone, Send, QrCode, ArrowRight, RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -14,7 +14,7 @@ interface ProfileScreenProps {
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) => {
-  const { user, logout, biometricsEnabled, toggleBiometrics, loadDemoAccount, refreshProfile } = useAuth();
+  const { user, logout, biometricsEnabled, toggleBiometrics, refreshProfile } = useAuth();
   const { mode, toggleTheme, colors } = useTheme();
 
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
@@ -23,7 +23,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) =>
   const [newPassword, setNewPassword] = useState('');
   const [passwordMsg, setPasswordMsg] = useState<{ text: string; isError: boolean } | null>(null);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [isResettingDemo, setIsResettingDemo] = useState(false);
 
   // Quick PIN states
   const [showQuickPin, setShowQuickPin] = useState(false);
@@ -129,21 +128,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) =>
       setPasswordMsg({ text: err.message || 'Failed to change password', isError: true });
     } finally {
       setIsChangingPassword(false);
-    }
-  };
-
-  const handleResetDemoData = async () => {
-    if (!confirm('Re-seed realistic sample documents (Aadhaar, Passport, Insurance, Family Vault)?')) return;
-    setIsResettingDemo(true);
-    try {
-      await api.seedDemoData();
-      await loadDemoAccount();
-      onRefreshAll();
-      alert('Demo Vault data successfully restored!');
-    } catch (e: any) {
-      alert(e.message || 'Failed to re-seed demo data');
-    } finally {
-      setIsResettingDemo(false);
     }
   };
 
@@ -657,48 +641,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) =>
             </form>
           </div>
         )}
-      </div>
-
-      {/* Demo Account & Project Presentation Tools */}
-      <div style={{
-        padding: 16,
-        borderRadius: 16,
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        border: '1px solid rgba(59, 130, 246, 0.3)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 10,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Sparkles size={18} color="#3B82F6" />
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#3B82F6' }}>
-            Final Year Project Demo Environment
-          </div>
-        </div>
-        <p style={{ fontSize: 12, color: colors.textMuted, lineHeight: 1.4 }}>
-          Quickly reset or load realistic pre-seeded documents (Aadhaar, Passport, Driving License, Health Insurance, Degree Certificate, Sharma Family Vault, and Emergency Medical Profile).
-        </p>
-        <button
-          onClick={handleResetDemoData}
-          disabled={isResettingDemo}
-          style={{
-            padding: '10px 14px',
-            borderRadius: 10,
-            backgroundColor: '#3B82F6',
-            color: '#FFF',
-            border: 'none',
-            fontSize: 13,
-            fontWeight: 700,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
-          }}
-        >
-          <RotateCcw size={15} />
-          <span>{isResettingDemo ? 'Restoring Demo Vault...' : 'Reset & Re-Seed Full Demo Vault'}</span>
-        </button>
       </div>
 
       {/* Security Audit Trail Log */}
