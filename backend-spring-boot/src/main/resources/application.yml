@@ -40,8 +40,14 @@ digivault:
     expiration-ms: 86400000 # 24 hours
     refresh-expiration-ms: 2592000000 # 30 days
   storage:
-    type: ${STORAGE_TYPE:local} # "local" or "firebase"
+    type: ${STORAGE_TYPE:local} # "local", "r2", "s3", or "firebase"
     upload-dir: ${STORAGE_DIR:./storage_uploads}
+    r2:
+      account-id: ${R2_ACCOUNT_ID:}
+      access-key-id: ${R2_ACCESS_KEY_ID:}
+      secret-access-key: ${R2_SECRET_ACCESS_KEY:}
+      bucket-name: ${R2_BUCKET_NAME:}
+      public-url: ${R2_PUBLIC_URL:}
     firebase:
       bucket-name: ${FIREBASE_STORAGE_BUCKET:docuvault-app.appspot.com}
       credentials-path: ${FIREBASE_CREDENTIALS_PATH:}

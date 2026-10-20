@@ -47,9 +47,9 @@ public class EmailService {
             helper.setTo(toEmail);
             helper.setSubject("DocuVault Verification Code: " + otp);
 
-            String html = "<div style='font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 540px; margin: 0 auto; padding: 32px 24px; background-color: #0F172A; color: #F8FAFC; border-radius: 16px; border: 1px solid #1E293B;'>"
+            String html = "<div style='font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 540px; margin: 0 auto; padding: 32px 24px; background-color: #0F172A; color: #F8FAFC; border-radius: 16px; border: 1px solid #1E293B;'>"
                     + "<div style='text-align: center; margin-bottom: 28px;'>"
-                    + "<div style='display: inline-block; width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #0D9488, #1E3A8A); line-height: 48px; font-size: 24px; margin-bottom: 12px;'>🛡️</div>"
+                    + "<div style='display: inline-block; width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #0D9488, #1E3A8A); line-height: 48px; font-size: 24px; margin-bottom: 12px;'>&#128737;</div>"
                     + "<h1 style='color: #FFFFFF; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px;'>Docu<span style='color: #14B8A6;'>Vault</span></h1>"
                     + "<p style='color: #94A3B8; font-size: 13px; margin: 6px 0 0 0;'>Smart Digital Document Locker & Family Emergency Vault</p>"
                     + "</div>"
@@ -58,7 +58,7 @@ public class EmailService {
                     + "<div style='display: inline-block; padding: 14px 28px; background-color: #0F172A; border: 1px solid #0D9488; border-radius: 12px; font-size: 36px; font-weight: 900; letter-spacing: 10px; color: #2DD4BF; font-family: monospace;'>"
                     + otp
                     + "</div>"
-                    + "<p style='font-size: 12px; color: #94A3B8; margin: 20px 0 0 0;'>⏳ Valid for <b>10 minutes</b>. For your security, never share this code.</p>"
+                    + "<p style='font-size: 12px; color: #94A3B8; margin: 20px 0 0 0;'>&#9203; Valid for <b>10 minutes</b>. For your security, never share this code.</p>"
                     + "</div>"
                     + "<p style='font-size: 11px; color: #64748B; text-align: center; margin: 28px 0 0 0;'>If you did not request this verification code, please ignore this email or contact support.</p>"
                     + "</div>";
