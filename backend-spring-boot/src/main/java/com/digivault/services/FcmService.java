@@ -1,65 +1,113 @@
 package com.digivault.services;
 
+import com.google.auth.oauth2.GoogleCredentials;
+import com.google.firebase.FirebaseApp;
+import com.google.firebase.FirebaseOptions;
+import com.google.firebase.messaging.FirebaseMessaging;
+import com.google.firebase.messaging.Message;
+import com.google.firebase.messaging.Notification;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.util.StringUtils;
 
-import java.util.HashMap;
+import javax.annotation.PostConstruct;
+import java.io.ByteArrayInputStream;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 /**
  * Firebase Cloud Messaging (FCM) Push Notification Service
- * Sends push notifications to mobile client devices (React Native)
- * for document expiry alerts, emergency access triggers, and family invitations.
+ * Dispatches real-time background and foreground push notifications
+ * using Firebase Admin SDK (HTTP v1 API).
  */
 @Service
 public class FcmService {
 
     private static final Logger logger = LoggerFactory.getLogger(FcmService.class);
 
-    @Value("${digivault.fcm.server-key:}")
-    private String fcmServerKey;
+    @Value("${digivault.firebase.credentials-path:${FIREBASE_CREDENTIALS_PATH:}}")
+    private String credentialsPath;
 
-    @Value("${digivault.fcm.url:https://fcm.googleapis.com/fcm/send}")
-    private String fcmUrl;
+    @Value("${digivault.firebase.credentials-json:${FIREBASE_SERVICE_ACCOUNT_JSON:}}")
+    private String credentialsJson;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private boolean initialized = false;
+
+    @PostConstruct
+    public void init() {
+        try {
+            if (!FirebaseApp.getApps().isEmpty()) {
+                this.initialized = true;
+                logger.info("FirebaseApp is already initialized.");
+                return;
+            }
+
+            InputStream serviceAccountStream = null;
+
+            if (StringUtils.hasText(credentialsJson)) {
+                serviceAccountStream = new ByteArrayInputStream(credentialsJson.getBytes(StandardCharsets.UTF_8));
+                logger.info("Initializing Firebase Admin SDK using FIREBASE_SERVICE_ACCOUNT_JSON environment variable.");
+            } else if (StringUtils.hasText(credentialsPath)) {
+                serviceAccountStream = new FileInputStream(credentialsPath);
+                logger.info("Initializing Firebase Admin SDK using credentials file at: {}", credentialsPath);
+            }
+
+            if (serviceAccountStream != null) {
+                FirebaseOptions options = FirebaseOptions.builder()
+                        .setCredentials(GoogleCredentials.fromStream(serviceAccountStream))
+                        .build();
+
+                FirebaseApp.initializeApp(options);
+                this.initialized = true;
+                logger.info("Firebase Cloud Messaging (FCM HTTP v1) successfully initialized!");
+            } else {
+                logger.info("Firebase service account credentials not supplied. FCM operating in simulation mode.");
+            }
+        } catch (Exception e) {
+            logger.warn("Could not initialize Firebase Admin SDK: {}. FCM operating in simulation mode.", e.getMessage());
+            this.initialized = false;
+        }
+    }
 
     public boolean sendPushNotification(String deviceToken, String title, String body, Map<String, String> data) {
-        if (fcmServerKey == null || fcmServerKey.trim().isEmpty()) {
-            logger.info("FCM Server Key not configured; simulated push notification: [{}] {}", title, body);
+        if (!StringUtils.hasText(deviceToken)) {
+            logger.warn("Cannot send push notification: deviceToken is empty.");
+            return false;
+        }
+
+        if (!initialized) {
+            logger.info("FCM simulated push notification: [{}] {} (Recipient device: {})", title, body, deviceToken);
             return true;
         }
 
         try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("Authorization", "key=" + fcmServerKey);
+            Notification notification = Notification.builder()
+                    .setTitle(title)
+                    .setBody(body)
+                    .build();
 
-            Map<String, Object> notificationPayload = new HashMap<>();
-            notificationPayload.put("title", title);
-            notificationPayload.put("body", body);
-            notificationPayload.put("sound", "default");
+            Message.Builder messageBuilder = Message.builder()
+                    .setToken(deviceToken)
+                    .setNotification(notification);
 
-            Map<String, Object> requestBody = new HashMap<>();
-            requestBody.put("to", deviceToken);
-            requestBody.put("notification", notificationPayload);
-            if (data != null) {
-                requestBody.put("data", data);
+            if (data != null && !data.isEmpty()) {
+                messageBuilder.putAllData(data);
             }
 
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
-            restTemplate.postForEntity(fcmUrl, entity, String.class);
-            logger.info("Successfully dispatched FCM push notification to token: {}", deviceToken);
+            String response = FirebaseMessaging.getInstance().send(messageBuilder.build());
+            logger.info("Successfully dispatched FCM push notification! Message ID: {}", response);
             return true;
         } catch (Exception e) {
-            logger.error("Failed to send FCM push notification: {}", e.getMessage());
+            logger.error("Failed to send FCM push notification to token {}: {}", deviceToken, e.getMessage());
             return false;
         }
+    }
+
+    public boolean isInitialized() {
+        return initialized;
     }
 }

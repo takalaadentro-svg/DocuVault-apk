@@ -27,6 +27,7 @@ public class User {
     private boolean biometricEnabled = false;
     private String role = "ROLE_USER";
     private boolean emailVerified = false;
+    private String fcmToken;
 
     @CreatedDate
     private Date createdAt = new Date();
@@ -68,6 +69,9 @@ public class User {
 
     public boolean isEmailVerified() { return emailVerified; }
     public void setEmailVerified(boolean emailVerified) { this.emailVerified = emailVerified; }
+
+    public String getFcmToken() { return fcmToken; }
+    public void setFcmToken(String fcmToken) { this.fcmToken = fcmToken; }
 
     public Date getCreatedAt() { return createdAt; }
     public void setCreatedAt(Date createdAt) { this.createdAt = createdAt; }

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1041451302926",
+    "project_id": "docuvault-app-67e4c",
+    "storage_bucket": "docuvault-app-67e4c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1041451302926:android:ec57642d392b95e2ffbc5f",
+        "android_client_info": {
+          "package_name": "com.digivault.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD1kGLLWyA-630zjwHRLGDKrTCBZxavGSk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

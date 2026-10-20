@@ -712,6 +712,18 @@ class ApiService {
       return [];
     }
   }
+  async updateFcmToken(token: string): Promise<void> {
+    try {
+      await this.request('/auth/fcm-token', {
+        method: 'POST',
+        body: JSON.stringify({ token })
+      });
+      console.log('FCM token synchronized with backend');
+    } catch (e) {
+      console.warn('Failed to update FCM token on server:', e);
+    }
+  }
+
 }
 
 export const api = new ApiService();

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../types';
 import { api } from '../services/api';
+import { initializePushNotifications } from '../services/pushNotifications';
 
 interface AuthContextType {
   user: User | null;
@@ -91,6 +92,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       window.removeEventListener('docuvault_session_expired', handleSessionExpired);
     };
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      initializePushNotifications();
+    }
+  }, [user]);
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);

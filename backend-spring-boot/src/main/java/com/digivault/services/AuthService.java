@@ -206,4 +206,11 @@ public class AuthService {
         summary.setEmailVerified(user.isEmailVerified());
         return summary;
     }
+    public void updateFcmToken(User user, String token) {
+        if (user != null && token != null && !token.trim().isEmpty()) {
+            user.setFcmToken(token.trim());
+            userRepository.save(user);
+        }
+    }
+
 }

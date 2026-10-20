@@ -143,4 +143,15 @@ public class AuthController {
         resp.put("biometric_enabled", req.isEnabled());
         return ResponseEntity.ok(resp);
     }
+    @PostMapping("/fcm-token")
+    public ResponseEntity<?> updateFcmToken(
+            @AuthenticationPrincipal User user,
+            @RequestBody Map<String, String> body) {
+        if (user == null) {
+            return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
+        }
+        authService.updateFcmToken(user, body.get("token"));
+        return ResponseEntity.ok(Collections.singletonMap("status", "success"));
+    }
+
 }
