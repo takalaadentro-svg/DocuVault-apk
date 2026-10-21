@@ -269,6 +269,16 @@ class ApiService {
     });
   }
 
+  getDocumentDownloadUrl(id: string): string {
+    const token = this.getToken();
+    return `${BASE_URL}/documents/${id}/download${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+  }
+
+  getDocumentPreviewUrl(id: string): string {
+    const token = this.getToken();
+    return `${BASE_URL}/documents/${id}/preview${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+  }
+
   async downloadDocument(id: string): Promise<Blob> {
     const token = this.getToken();
     const headers = new Headers();
@@ -277,6 +287,40 @@ class ApiService {
     const response = await fetch(`${BASE_URL}/documents/${id}/download`, { headers });
     if (!response.ok) throw new Error('Download failed');
     return response.blob();
+  }
+
+  async chatWithDocuments(question: string): Promise<DocumentChatResponse> {
+    return this.request<DocumentChatResponse>('/documents/chat', {
+      method: 'POST',
+      body: JSON.stringify({ question })
+    });
+  }
+
+  async setupQuickPin(pin: string) {
+    return this.request<{ message: string; has_quick_pin: boolean }>('/auth/quick-pin', {
+      method: 'POST',
+      body: JSON.stringify({ pin })
+    });
+  }
+
+  async changePassword(data: { old_password?: string; new_password?: string }) {
+    return this.request<{ message: string }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async grantPermission(docId: string, data: { granted_to_user_email: string; can_view: boolean; can_download: boolean }) {
+    return this.request<DocumentPermission>(`/documents/${docId}/permissions`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async revokePermission(docId: string, permissionId: string) {
+    return this.request<{ message: string }>(`/documents/${docId}/permissions/${permissionId}`, {
+      method: 'DELETE'
+    });
   }
 
   async askDocumentAssistant(docId: string, question: string): Promise<DocumentChatResponse> {

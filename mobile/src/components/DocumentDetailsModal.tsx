@@ -94,8 +94,9 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
 
   const downloadUrl = api.getDocumentDownloadUrl(doc.id);
   const previewUrl = api.getDocumentPreviewUrl(doc.id);
-  const isPdf = doc.mime_type.includes('pdf');
-  const isImage = doc.mime_type.includes('image');
+  const mime = (doc.mime_type || '').toLowerCase();
+  const isPdf = mime.includes('pdf');
+  const isImage = mime.includes('image');
 
   // Expiry badge calculation
   let expiryColor = colors.success;
