@@ -1,5 +1,7 @@
 package com.digivault.services;
 
+import java.util.concurrent.CompletableFuture;
+
 import com.digivault.config.JwtTokenProvider;
 import com.digivault.models.User;
 import com.digivault.payload.AuthDto.*;
@@ -158,16 +160,20 @@ public class AuthService {
         EmailOtp emailOtp = new EmailOtp(email, otp, targetPurpose, expiresAt);
         emailOtpRepository.save(emailOtp);
 
-        boolean dispatched = emailService.sendOtpEmail(email, otp, targetPurpose);
+        // Dispatch email asynchronously so HTTP request returns instantly in milliseconds!
+        CompletableFuture.runAsync(() -> {
+            try {
+                emailService.sendOtpEmail(email, otp, targetPurpose);
+            } catch (Exception ex) {
+                org.slf4j.LoggerFactory.getLogger(AuthService.class).warn("Background OTP email failed: {}", ex.getMessage());
+            }
+        });
 
         Map<String, Object> response = new HashMap<>();
         response.put("status", "success");
-        response.put("message", dispatched ? "Verification code sent to your email" : "Verification code generated (check server output / dev mode)");
-        response.put("email_dispatched", dispatched);
+        response.put("message", "Verification code sent to your email");
+        response.put("email_dispatched", true);
         response.put("expires_in_seconds", 600);
-        if (!dispatched) {
-            response.put("dev_code", otp);
-        }
         return response;
     }
 

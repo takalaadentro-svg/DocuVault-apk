@@ -1,5 +1,7 @@
 package com.digivault.services;
 
+import java.util.concurrent.CompletableFuture;
+
 import com.digivault.models.*;
 import com.digivault.payload.FamilyDto.*;
 import com.digivault.repositories.*;
@@ -73,17 +75,19 @@ public class FamilyService {
                 cal.getTime()
         );
         FamilyInvitation saved = familyInvitationRepository.save(invitation);
-        try {
-            emailService.sendFamilyInvitationEmail(
-                    inviteeEmail.trim().toLowerCase(),
-                    user.getFullName(),
-                    details.getName(),
-                    token,
-                    cal.getTime()
-            );
-        } catch (Exception ex) {
-            logger.warn("Could not dispatch invitation email: {}", ex.getMessage());
-        }
+        CompletableFuture.runAsync(() -> {
+            try {
+                emailService.sendFamilyInvitationEmail(
+                        inviteeEmail.trim().toLowerCase(),
+                        user.getFullName(),
+                        details.getName(),
+                        token,
+                        cal.getTime()
+                );
+            } catch (Exception ex) {
+                logger.warn("Could not dispatch invitation email: {}", ex.getMessage());
+            }
+        });
         return saved;
     }
 
