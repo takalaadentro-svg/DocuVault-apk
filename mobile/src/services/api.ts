@@ -77,9 +77,9 @@ class ApiService {
       headers.set('Content-Type', 'application/json');
     }
 
-    // 30-second timeout to handle cloud spin-up & large uploads smoothly
+    // 60-second timeout to handle cloud cold-starts & uploads smoothly
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
       const response = await fetch(`${BASE_URL}${endpoint}`, {
@@ -117,6 +117,11 @@ class ApiService {
         return response.json();
       }
       return response.text() as unknown as T;
+    } catch (err: any) {
+      if (err.name === 'AbortError' || err.message?.toLowerCase().includes('aborted')) {
+        throw new Error('Server connection timed out while waking up. Please try again.');
+      }
+      throw err;
     } finally {
       clearTimeout(timeoutId);
     }
