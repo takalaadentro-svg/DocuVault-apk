@@ -19,7 +19,7 @@ public class EmailService {
     @Autowired(required = false)
     private JavaMailSender mailSender;
 
-    @Value("${spring.mail.username:}")
+    @Value("${spring.mail.username:${MAIL_USERNAME:}}")
     private String mailFrom;
 
     private final SecureRandom random = new SecureRandom();
