@@ -24,6 +24,11 @@ public class FamilyService {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private EmailService emailService;
+
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(FamilyService.class);
+
     public FamilyGroupDetails getOrCreateFamilyGroup(User user) {
         List<FamilyMember> memberships = familyMemberRepository.findByUserId(user.getId());
         FamilyGroup group;
@@ -67,7 +72,19 @@ public class FamilyService {
                 token,
                 cal.getTime()
         );
-        return familyInvitationRepository.save(invitation);
+        FamilyInvitation saved = familyInvitationRepository.save(invitation);
+        try {
+            emailService.sendFamilyInvitationEmail(
+                    inviteeEmail.trim().toLowerCase(),
+                    user.getFullName(),
+                    details.getName(),
+                    token,
+                    cal.getTime()
+            );
+        } catch (Exception ex) {
+            logger.warn("Could not dispatch invitation email: {}", ex.getMessage());
+        }
+        return saved;
     }
 
     public boolean acceptInvitation(User user, String token) {

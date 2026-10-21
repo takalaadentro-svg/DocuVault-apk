@@ -258,11 +258,11 @@ Transfer this file to any Android device or share via Google Drive/WhatsApp and 
   cd mobile
   npm test
   ```
-- **Postman Collection**: Import [`docs/DocuVault_Postman_Collection.json`](file:///d:/Applications/Projects/Vishanth_frirend/Digi-App/docs/DocuVault_Postman_Collection.json) into Postman for automated API test runs.
+- **Postman Collection**: Import [`docs/DocuVault_Postman_Collection.json`](file:///d:/Applications/Projects/M_Project/Digi-App/docs/DocuVault_Postman_Collection.json) into Postman for automated API test runs.
 
 ---
 
 ## 👥 Authors & Academic Credits
 - **Major Project**: DocuVault 2.0 — Smart Digital Document Locker & Family Emergency Vault
 - **Architecture**: Microservice-oriented, Biometric-first, Cloud-Native
-- **License**: MIT
+- **License**: Academic Project
