@@ -45,6 +45,59 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [isOffline, setIsOffline] = useState(doc?.is_offline_available ?? true);
 
+  // Authenticated blob preview & download
+  const [blobPreview, setBlobPreview] = useState<string | null>(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    let url: string | null = null;
+    if (isOpen && doc && doc.id) {
+      setIsLoadingPreview(true);
+      api.downloadDocument(doc.id)
+        .then(blob => {
+          if (isMounted) {
+            url = URL.createObjectURL(blob);
+            setBlobPreview(url);
+          }
+        })
+        .catch(err => {
+          console.warn('Could not fetch preview blob:', err);
+        })
+        .finally(() => {
+          if (isMounted) setIsLoadingPreview(false);
+        });
+    }
+    return () => {
+      isMounted = false;
+      if (url) {
+        URL.revokeObjectURL(url);
+      }
+      setBlobPreview(null);
+    };
+  }, [isOpen, doc?.id]);
+
+  const handleDownload = async () => {
+    if (!doc || isDownloading) return;
+    setIsDownloading(true);
+    try {
+      const blob = await api.downloadDocument(doc.id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = doc.original_filename || (doc.title ? `${doc.title}.bin` : 'document');
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+    } catch (err: any) {
+      alert(err.message || 'Download failed');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   useEffect(() => {
     if (isOpen && doc) {
       setIsOffline(doc.is_offline_available ?? true);
@@ -360,24 +413,30 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
                 alignItems: 'center',
                 justifyContent: 'center',
               }}>
-                {isImage ? (
+                {isLoadingPreview ? (
+                  <div style={{ textAlign: 'center', padding: 30 }}>
+                    <Loader2 size={36} color={colors.accentLight} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
+                    <div style={{ fontSize: 14, fontWeight: 600, color: colors.text }}>Loading secure preview from vault...</div>
+                    <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 4 }}>Decrypting document data</div>
+                  </div>
+                ) : isImage && (blobPreview || previewUrl) ? (
                   <img
-                    src={previewUrl}
+                    src={blobPreview || previewUrl}
                     alt={doc.title}
                     style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
                   />
-                ) : isPdf ? (
+                ) : isPdf && (blobPreview || previewUrl) ? (
                   <iframe
-                    src={`${previewUrl}#toolbar=0`}
+                    src={`${blobPreview || previewUrl}#toolbar=0`}
                     title={doc.title}
                     style={{ width: '100%', height: '100%', border: 'none', minHeight: 380 }}
                   />
                 ) : (
                   <div style={{ textAlign: 'center', padding: 30 }}>
                     <FileText size={48} color={colors.accentLight} style={{ margin: '0 auto 12px' }} />
-                    <div style={{ fontSize: 15, fontWeight: 600, color: colors.text }}>Document Ready</div>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: colors.text }}>{doc.title || 'Document Ready'}</div>
                     <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 4 }}>
-                      Format: {doc.mime_type} • {(doc.file_size / 1024).toFixed(1)} KB
+                      Format: {doc.mime_type || 'Document'} • {((doc.file_size || 0) / 1024).toFixed(1)} KB
                     </div>
                   </div>
                 )}
@@ -1038,9 +1097,9 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
             <>
               <div style={{ display: 'flex', gap: 8 }}>
                 {/* Download */}
-                <a
-                  href={downloadUrl}
-                  download={doc.original_filename}
+                <button
+                  onClick={handleDownload}
+                  disabled={isDownloading}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -1052,12 +1111,12 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
                     color: colors.text,
                     fontSize: 12,
                     fontWeight: 600,
-                    textDecoration: 'none',
+                    cursor: 'pointer',
                   }}
                 >
-                  <Download size={14} />
-                  <span>Download</span>
-                </a>
+                  {isDownloading ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Download size={14} />}
+                  <span>{isDownloading ? 'Downloading...' : 'Download'}</span>
+                </button>
 
                 {/* QR Share */}
                 <button
