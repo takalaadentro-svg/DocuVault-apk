@@ -91,8 +91,39 @@ public class FamilyService {
         return saved;
     }
 
-    public boolean acceptInvitation(User user, String token) {
-        Optional<FamilyInvitation> invOpt = familyInvitationRepository.findByToken(token);
+    public List<Map<String, Object>> getPendingInvitations(User user) {
+        List<FamilyInvitation> list = familyInvitationRepository.findByInviteeEmail(user.getEmail());
+        List<Map<String, Object>> response = new ArrayList<>();
+        for (FamilyInvitation inv : list) {
+            if ("PENDING".equalsIgnoreCase(inv.getStatus())) {
+                Map<String, Object> map = new HashMap<>();
+                map.put("id", inv.getId());
+                map.put("token", inv.getToken());
+                map.put("family_id", inv.getFamilyGroupId());
+                map.put("invitee_email", inv.getInviteeEmail());
+                map.put("status", inv.getStatus());
+                map.put("created_at", inv.getCreatedAt());
+                map.put("role", "MEMBER");
+
+                familyGroupRepository.findById(inv.getFamilyGroupId()).ifPresent(g -> {
+                    map.put("family_name", g.getName());
+                });
+
+                userRepository.findById(inv.getInviterId()).ifPresent(u -> {
+                    map.put("inviter_name", u.getFullName());
+                });
+
+                response.add(map);
+            }
+        }
+        return response;
+    }
+
+    public boolean acceptInvitation(User user, String tokenOrId) {
+        Optional<FamilyInvitation> invOpt = familyInvitationRepository.findByToken(tokenOrId);
+        if (!invOpt.isPresent()) {
+            invOpt = familyInvitationRepository.findById(tokenOrId);
+        }
         if (!invOpt.isPresent()) {
             throw new RuntimeException("Invalid invitation token");
         }
@@ -111,6 +142,20 @@ public class FamilyService {
             FamilyMember member = new FamilyMember(invitation.getFamilyGroupId(), user.getId(), "MEMBER");
             familyMemberRepository.save(member);
         }
+        return true;
+    }
+
+    public boolean declineInvitation(User user, String tokenOrId) {
+        Optional<FamilyInvitation> invOpt = familyInvitationRepository.findByToken(tokenOrId);
+        if (!invOpt.isPresent()) {
+            invOpt = familyInvitationRepository.findById(tokenOrId);
+        }
+        if (!invOpt.isPresent()) {
+            throw new RuntimeException("Invalid invitation token");
+        }
+        FamilyInvitation invitation = invOpt.get();
+        invitation.setStatus("DECLINED");
+        familyInvitationRepository.save(invitation);
         return true;
     }
 

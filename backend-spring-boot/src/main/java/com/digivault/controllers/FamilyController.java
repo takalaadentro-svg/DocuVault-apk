@@ -76,19 +76,34 @@ public class FamilyController {
         if (user == null) {
             return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
         }
-        return ResponseEntity.ok(familyInvitationRepository.findByInviteeEmail(user.getEmail()));
+        return ResponseEntity.ok(familyService.getPendingInvitations(user));
     }
 
     @PostMapping({"/invitations/{invitationId}/respond", "/accept"})
     public ResponseEntity<?> respondInvitation(
             @AuthenticationPrincipal User user,
             @PathVariable(value = "invitationId", required = false) String invitationId,
-            @RequestBody Map<String, String> body) {
+            @RequestBody(required = false) Map<String, String> body) {
         if (user == null) {
             return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
         }
-        String token = body.getOrDefault("token", invitationId);
+        String token = null;
+        String action = "ACCEPT";
+        if (body != null) {
+            token = body.get("token");
+            if (body.containsKey("action")) {
+                action = body.get("action");
+            }
+        }
+        if (token == null || token.trim().isEmpty()) {
+            token = invitationId;
+        }
+
         try {
+            if ("REJECT".equalsIgnoreCase(action) || "DECLINE".equalsIgnoreCase(action)) {
+                familyService.declineInvitation(user, token);
+                return ResponseEntity.ok(Collections.singletonMap("message", "Invitation declined"));
+            }
             boolean success = familyService.acceptInvitation(user, token);
             return ResponseEntity.ok(Collections.singletonMap("message", "Invitation accepted"));
         } catch (Exception e) {

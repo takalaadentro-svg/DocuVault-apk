@@ -243,15 +243,15 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
                   >
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>
-                        {inv.family_name}
+                        {inv.family_name || 'Family Vault'}
                       </div>
                       <div style={{ fontSize: 11, color: colors.textMuted }}>
-                        Invited by {inv.inviter_name} as {inv.role}
+                        Invited by {inv.inviter_name || 'Family Admin'} as {inv.role || 'Member'}
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button
-                        onClick={() => handleRespondInvitation(inv.id, 'ACCEPT')}
+                        onClick={() => handleRespondInvitation((inv as any).token || inv.id, 'ACCEPT')}
                         style={{
                           padding: '6px 12px',
                           borderRadius: 6,
@@ -266,7 +266,7 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
                         Accept
                       </button>
                       <button
-                        onClick={() => handleRespondInvitation(inv.id, 'REJECT')}
+                        onClick={() => handleRespondInvitation((inv as any).token || inv.id, 'REJECT')}
                         style={{
                           padding: '6px 10px',
                           borderRadius: 6,
