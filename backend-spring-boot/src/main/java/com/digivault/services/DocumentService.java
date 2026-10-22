@@ -159,12 +159,12 @@ public class DocumentService {
                 docs = documentRepository.findByUserId(user.getId());
             }
         } catch (Exception e) {
-            logger.warn("Database lookup fallback to demo records: {}", e.getMessage());
-            docs = getDemoDocumentRecords(user);
+            logger.warn("Database lookup error: {}", e.getMessage());
+            docs = Collections.emptyList();
         }
 
-        if (docs.isEmpty() && "demo-user-id".equals(user.getId())) {
-            docs = getDemoDocumentRecords(user);
+        if (docs == null) {
+            docs = Collections.emptyList();
         }
 
         return docs.stream()
@@ -301,138 +301,11 @@ public class DocumentService {
             throw new RuntimeException("Access Denied: You do not have permission to view this document");
         }
 
-        for (DocumentRecord d : getDemoDocumentRecords(user)) {
-            if (d.getId().equals(id)) return d;
-        }
-
         throw new RuntimeException("Document not found with ID: " + id);
     }
 
     public List<DocumentRecord> getDemoDocumentRecords(User user) {
-        List<DocumentRecord> list = new ArrayList<>();
-
-        DocumentRecord d1 = new DocumentRecord();
-        d1.setId("demo-doc-1");
-        d1.setUserId(user != null ? user.getId() : "demo-user-id");
-        d1.setTitle("Passport - Republic of India");
-        d1.setCategory("Travel");
-        d1.setDocType("Passport");
-        d1.setSubtype("Passport");
-        d1.setIssuer("Ministry of External Affairs");
-        d1.setHolderName(user != null ? user.getFullName() : "Rajesh Sharma");
-        d1.setDocNumber("Z1234567");
-        d1.setDob("15/08/1990");
-        d1.setOriginalFilename("passport_rajesh_sharma.pdf");
-        d1.setFileSize(2450000);
-        d1.setMimeType("application/pdf");
-        d1.setSha256Hash("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
-        d1.setOcrText("PASSPORT REPUBLIC OF INDIA GIVEN NAME: RAJESH SURNAME: SHARMA NATIONALITY: INDIAN PASSPORT NO: Z1234567 DOB: 15/08/1990");
-        d1.setExpiryDate(new Date(System.currentTimeMillis() + 86400000L * 45)); // 45 days left
-        d1.setEmergencyEligible(true);
-        d1.setFamilyVault(false);
-        d1.setOfflineAvailable(true);
-        d1.setVersion(1);
-        d1.setCreatedAt(new Date());
-        d1.setUpdatedAt(new Date());
-        list.add(d1);
-
-        DocumentRecord d2 = new DocumentRecord();
-        d2.setId("demo-doc-2");
-        d2.setUserId(user != null ? user.getId() : "demo-user-id");
-        d2.setTitle("Aadhaar Card");
-        d2.setCategory("Identity");
-        d2.setDocType("National ID");
-        d2.setSubtype("Aadhaar Card");
-        d2.setIssuer("UIDAI Government of India");
-        d2.setHolderName(user != null ? user.getFullName() : "Rajesh Sharma");
-        d2.setDocNumber("9876 5432 1098");
-        d2.setDob("15/08/1990");
-        d2.setOriginalFilename("aadhaar_card.pdf");
-        d2.setFileSize(1250000);
-        d2.setMimeType("application/pdf");
-        d2.setSha256Hash("a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0");
-        d2.setOcrText("GOVERNMENT OF INDIA UNIQUE IDENTIFICATION AUTHORITY OF INDIA AADHAAR 9876 5432 1098 RAJESH SHARMA DOB 15/08/1990");
-        d2.setEmergencyEligible(true);
-        d2.setFamilyVault(true);
-        d2.setOfflineAvailable(true);
-        d2.setVersion(1);
-        d2.setCreatedAt(new Date());
-        d2.setUpdatedAt(new Date());
-        list.add(d2);
-
-        DocumentRecord d3 = new DocumentRecord();
-        d3.setId("demo-doc-3");
-        d3.setUserId(user != null ? user.getId() : "demo-user-id");
-        d3.setTitle("Health Insurance Floater Policy");
-        d3.setCategory("Finance");
-        d3.setDocType("Insurance Policy");
-        d3.setSubtype("Health Insurance");
-        d3.setIssuer("Star Health and Allied Insurance");
-        d3.setHolderName(user != null ? user.getFullName() : "Rajesh Sharma");
-        d3.setDocNumber("P/123456/01/2026/000123");
-        d3.setOriginalFilename("health_insurance.pdf");
-        d3.setFileSize(3145728);
-        d3.setMimeType("application/pdf");
-        d3.setSha256Hash("b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef01a");
-        d3.setOcrText("FAMILY HEALTH OPTIMA INSURANCE POLICY POLICY NO: P/123456/01/2026/000123 SUM INSURED: RS 1500000 INSURED: RAJESH SHARMA");
-        d3.setExpiryDate(new Date(System.currentTimeMillis() + 86400000L * 5)); // 5 days left
-        d3.setEmergencyEligible(true);
-        d3.setFamilyVault(true);
-        d3.setOfflineAvailable(true);
-        d3.setVersion(1);
-        d3.setCreatedAt(new Date());
-        d3.setUpdatedAt(new Date());
-        list.add(d3);
-
-        DocumentRecord d4 = new DocumentRecord();
-        d4.setId("demo-doc-4");
-        d4.setUserId(user != null ? user.getId() : "demo-user-id");
-        d4.setTitle("Driving Licence");
-        d4.setCategory("Identity");
-        d4.setDocType("Driving License");
-        d4.setSubtype("Driving License");
-        d4.setIssuer("Transport Department Karnataka");
-        d4.setHolderName(user != null ? user.getFullName() : "Rajesh Sharma");
-        d4.setDocNumber("KA-01-2020-0012345");
-        d4.setDob("15/08/1990");
-        d4.setOriginalFilename("driving_licence.pdf");
-        d4.setFileSize(850000);
-        d4.setMimeType("application/pdf");
-        d4.setSha256Hash("c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef01ab2");
-        d4.setOcrText("INDIAN UNION DRIVING LICENCE KA-01-2020-0012345 AUTHORISED TO DRIVE LMV MCWG RAJESH SHARMA");
-        d4.setExpiryDate(new Date(System.currentTimeMillis() + 86400000L * 450));
-        d4.setEmergencyEligible(true);
-        d4.setFamilyVault(false);
-        d4.setOfflineAvailable(false);
-        d4.setVersion(1);
-        d4.setCreatedAt(new Date());
-        d4.setUpdatedAt(new Date());
-        list.add(d4);
-
-        DocumentRecord d5 = new DocumentRecord();
-        d5.setId("demo-doc-5");
-        d5.setUserId(user != null ? user.getId() : "demo-user-id");
-        d5.setTitle("B.Tech Degree Certificate");
-        d5.setCategory("Education");
-        d5.setDocType("Degree Certificate");
-        d5.setSubtype("Degree Certificate");
-        d5.setIssuer("Visvesvaraya Technological University");
-        d5.setHolderName(user != null ? user.getFullName() : "Rajesh Sharma");
-        d5.setDocNumber("VTU-2012-BE-8899");
-        d5.setOriginalFilename("btech_degree.pdf");
-        d5.setFileSize(4200000);
-        d5.setMimeType("application/pdf");
-        d5.setSha256Hash("d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef01ab2c3");
-        d5.setOcrText("VISVESVARAYA TECHNOLOGICAL UNIVERSITY DEGREE OF BACHELOR OF ENGINEERING COMPUTER SCIENCE FIRST CLASS WITH DISTINCTION CONFERRED UPON RAJESH SHARMA");
-        d5.setEmergencyEligible(false);
-        d5.setFamilyVault(false);
-        d5.setOfflineAvailable(false);
-        d5.setVersion(1);
-        d5.setCreatedAt(new Date());
-        d5.setUpdatedAt(new Date());
-        list.add(d5);
-
-        return list;
+        return Collections.emptyList();
     }
 
     public DocumentResponse toResponse(DocumentRecord record) {

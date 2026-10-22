@@ -33,10 +33,8 @@ public class NotificationController {
             return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
         }
         List<Notification> list = notificationService.getUserNotifications(user);
-        if (list == null || list.isEmpty()) {
-            Notification n1 = new Notification(user.getId(), "Health Insurance Expiry", "Health Insurance Floater Policy expires in 5 days. Consider renewing to prevent coverage lapse.", "EXPIRY_WARNING", null);
-            Notification n2 = new Notification(user.getId(), "Passport Expiry Alert", "Republic of India Passport will expire in 22 days. Renewal slot booking recommended.", "EXPIRY_WARNING", null);
-            list = Arrays.asList(n1, n2);
+        if (list == null) {
+            list = Collections.emptyList();
         }
         return ResponseEntity.ok(list);
     }
@@ -47,7 +45,6 @@ public class NotificationController {
             return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
         }
         long count = notificationService.getUnreadCount(user);
-        if (count == 0) count = 2; // Baseline demo notices
         return ResponseEntity.ok(Collections.singletonMap("unread_count", count));
     }
 
@@ -95,14 +92,14 @@ public class NotificationController {
         }
 
         Map<String, Object> stats = new HashMap<>();
-        int totalDocs = 5;
-        int expiringSoon = 2;
+        int totalDocs = 0;
+        int expiringSoon = 0;
         int expired = 0;
 
         if (documentService != null) {
             try {
                 List<DocumentResponse> docs = documentService.getDocuments(user, null, null, null);
-                if (docs != null && !docs.isEmpty()) {
+                if (docs != null) {
                     totalDocs = docs.size();
                     expiringSoon = (int) docs.stream().filter(d -> d.getDaysUntilExpiry() != null && d.getDaysUntilExpiry() >= 0 && d.getDaysUntilExpiry() <= 30).count();
                     expired = (int) docs.stream().filter(DocumentResponse::isExpired).count();
@@ -113,9 +110,9 @@ public class NotificationController {
         stats.put("total_documents", totalDocs);
         stats.put("expiring_soon_count", expiringSoon);
         stats.put("expired_count", expired);
-        stats.put("family_members_count", 2);
-        stats.put("active_shares_count", 1);
-        stats.put("emergency_contacts_count", 2);
+        stats.put("family_members_count", 0);
+        stats.put("active_shares_count", 0);
+        stats.put("emergency_contacts_count", 0);
 
         return ResponseEntity.ok(stats);
     }

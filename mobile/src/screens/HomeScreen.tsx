@@ -110,19 +110,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           }}>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 18, fontWeight: 800, color: '#FFFFFF' }}>
-                {stats?.total_documents ?? documents.length}
+                {safeDocs.length}
               </div>
               <div style={{ fontSize: 10, color: '#94A3B8', fontWeight: 600, marginTop: 2 }}>Documents</div>
             </div>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 18, fontWeight: 800, color: expiringDocs.length > 0 ? colors.warning : '#FFFFFF' }}>
-                {stats?.expiring_soon_count ?? expiringDocs.length}
+                {expiringDocs.length}
               </div>
               <div style={{ fontSize: 10, color: '#94A3B8', fontWeight: 600, marginTop: 2 }}>Expiring</div>
             </div>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 18, fontWeight: 800, color: '#FFFFFF' }}>
-                {stats?.family_members_count ?? 1}
+                {stats?.family_members_count ?? 0}
               </div>
               <div style={{ fontSize: 10, color: '#94A3B8', fontWeight: 600, marginTop: 2 }}>Family</div>
             </div>
