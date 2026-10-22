@@ -39,7 +39,11 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
   const [activeTab, setActiveTab] = useState<'members' | 'shared_with_me' | 'shared_by_me' | 'emergency'>('members');
 
   // Create Family state
-  const [showCreateFamily, setShowCreateFamily] = useState(false);
+    // Manual Token Input state
+  const [showTokenModal, setShowTokenModal] = useState(false);
+  const [manualToken, setManualToken] = useState('');
+  const [isJoiningWithToken, setIsJoiningWithToken] = useState(false);
+const [showCreateFamily, setShowCreateFamily] = useState(false);
   const [familyName, setFamilyName] = useState('');
   const [isCreatingFamily, setIsCreatingFamily] = useState(false);
 
@@ -72,6 +76,24 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
       handleRespondInvitation(pendingToken, 'ACCEPT');
     }
   }, []);
+
+    const handleJoinWithToken = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualToken.trim()) return;
+    setIsJoiningWithToken(true);
+    try {
+      await api.respondToInvitation(manualToken.trim(), 'ACCEPT');
+      showLocalNotification('DocuVault Family', 'Successfully joined Family Vault!');
+      alert('Successfully joined Family Vault!');
+      setManualToken('');
+      setShowTokenModal(false);
+      onRefresh();
+    } catch (err: any) {
+      alert(err.message || 'Invalid or expired invitation token.');
+    } finally {
+      setIsJoiningWithToken(false);
+    }
+  };
 
   const handleCreateFamily = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -178,28 +200,50 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
           <h1 style={{ fontSize: 20, fontWeight: 800, color: colors.text }}>Family & Emergency Vault</h1>
           <p style={{ fontSize: 12, color: colors.textMuted }}>Delegated permissions and emergency access</p>
         </div>
-        {primaryFamily && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button
-            onClick={() => onOpenInvite(primaryFamily.id)}
+            onClick={() => setShowTokenModal(true)}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              padding: '10px 14px',
-              borderRadius: 12,
-              backgroundColor: colors.accent,
-              color: '#FFF',
-              border: 'none',
-              fontSize: 13,
+              padding: '8px 12px',
+              borderRadius: 10,
+              backgroundColor: colors.surfaceCard,
+              color: colors.accentLight,
+              border: `1px solid ${colors.surfaceBorder}`,
+              fontSize: 12,
               fontWeight: 700,
               cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(13, 148, 136, 0.35)',
             }}
           >
-            <UserPlus size={16} />
-            <span>Invite</span>
+            <KeyRound size={14} />
+            <span>Enter Token</span>
           </button>
-        )}
+
+          {primaryFamily && (
+            <button
+              onClick={() => onOpenInvite(primaryFamily.id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 14px',
+                borderRadius: 10,
+                backgroundColor: colors.accent,
+                color: '#FFF',
+                border: 'none',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(13, 148, 136, 0.35)',
+              }}
+            >
+              <UserPlus size={14} />
+              <span>Invite</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Tabs */}
@@ -1017,6 +1061,110 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
           </div>
         </div>
       )}
+          {/* Manual Token Entry Modal */}
+      {showTokenModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.75)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 20,
+          zIndex: 9999,
+        }}>
+          <div style={{
+            width: '100%',
+            maxWidth: 400,
+            backgroundColor: colors.surface,
+            borderRadius: 20,
+            padding: 24,
+            border: `1px solid ${colors.surfaceBorder}`,
+            boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <KeyRound size={20} color={colors.accent} />
+                <h3 style={{ fontSize: 16, fontWeight: 800, color: colors.text, margin: 0 }}>
+                  Enter Invitation Token
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowTokenModal(false)}
+                style={{ background: 'none', border: 'none', color: colors.textMuted, cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p style={{ fontSize: 13, color: colors.textMuted, marginBottom: 16, lineHeight: 1.4 }}>
+              Paste the invitation token from your email to instantly join the family vault:
+            </p>
+
+            <form onSubmit={handleJoinWithToken} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <input
+                type="text"
+                required
+                placeholder="e.g. 92763adb-a7b5-4e5a-8582-870e35a96565"
+                value={manualToken}
+                onChange={e => setManualToken(e.target.value.trim())}
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: 12,
+                  backgroundColor: colors.surfaceCard,
+                  border: `1px solid ${colors.surfaceBorder}`,
+                  color: colors.text,
+                  fontSize: 13,
+                  fontFamily: 'monospace',
+                  outline: 'none',
+                }}
+              />
+
+              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowTokenModal(false)}
+                  style={{
+                    flex: 1,
+                    padding: 12,
+                    borderRadius: 10,
+                    backgroundColor: colors.surfaceCard,
+                    border: `1px solid ${colors.surfaceBorder}`,
+                    color: colors.textMuted,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isJoiningWithToken || !manualToken.trim()}
+                  style={{
+                    flex: 2,
+                    padding: 12,
+                    borderRadius: 10,
+                    backgroundColor: colors.accent,
+                    border: 'none',
+                    color: '#FFF',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: isJoiningWithToken ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {isJoiningWithToken ? 'Joining Vault...' : 'Join Vault'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
