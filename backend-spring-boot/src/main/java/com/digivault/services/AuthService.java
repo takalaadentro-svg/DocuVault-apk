@@ -173,7 +173,6 @@ public class AuthService {
         response.put("status", "success");
         response.put("message", "Verification code sent to your email");
         response.put("email_dispatched", true);
-        response.put("dev_code", otp);
         response.put("expires_in_seconds", 600);
         return response;
     }

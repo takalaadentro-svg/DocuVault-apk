@@ -19,7 +19,6 @@ export const AuthScreen: React.FC = () => {
   // OTP state
   const [otpCode, setOtpCode] = useState('');
   const [resendTimer, setResendTimer] = useState(0);
-  const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
   
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -55,16 +54,10 @@ export const AuthScreen: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const res = await sendOtp(email.trim(), 'REGISTRATION');
+      await sendOtp(email.trim(), 'REGISTRATION');
       setRegisterStep('otp');
       setResendTimer(60);
-      if (res.dev_code) {
-        setDevOtpHint(res.dev_code);
-        setSuccessMessage(`Verification code: ${res.dev_code} (also sent to ${email.trim()})`);
-      } else {
-        setDevOtpHint(null);
-        setSuccessMessage(`Verification code sent to ${email.trim()}`);
-      }
+      setSuccessMessage(`Verification code sent to ${email.trim()}. Please check your email.`);
     } catch (err: any) {
       const msg = err?.message || '';
       if (msg.toLowerCase().includes('already registered')) {
@@ -83,14 +76,9 @@ export const AuthScreen: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const res = await sendOtp(email.trim(), 'REGISTRATION');
+      await sendOtp(email.trim(), 'REGISTRATION');
       setResendTimer(60);
-      if (res.dev_code) {
-        setDevOtpHint(res.dev_code);
-        setSuccessMessage(`New code generated: ${res.dev_code}`);
-      } else {
-        setSuccessMessage(`A new verification code was sent to ${email.trim()}`);
-      }
+      setSuccessMessage(`A new verification code was sent to ${email.trim()}. Please check your email.`);
     } catch (err: any) {
       setErrorMessage(err.message || 'Failed to resend verification code');
     } finally {
