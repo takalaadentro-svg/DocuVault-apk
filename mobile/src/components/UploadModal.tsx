@@ -8,11 +8,12 @@ import confetti from 'canvas-confetti';
 import { api } from '../services/api';
 import { useTheme } from '../context/ThemeContext';
 import { OCRExtractResult, DuplicateCheckResult } from '../types';
+import { showLocalNotification } from '../services/pushNotifications';
 
 interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (uploadedTitle?: string) => void;
 }
 
 const CATEGORIES = [
@@ -175,7 +176,10 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSuc
         origin: { y: 0.6 }
       });
 
-      onSuccess();
+      const docTitle = title.trim() || 'Document';
+      showLocalNotification('DocuVault Secure Vault', `File "${docTitle}" successfully uploaded to your vault.`);
+
+      onSuccess(docTitle);
       onClose();
     } catch (err: any) {
       setErrorMessage(err.message || 'Failed to upload document');

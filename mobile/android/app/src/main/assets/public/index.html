@@ -48,9 +48,25 @@
         background: rgba(148, 163, 184, 0.4);
       }
     </style>
-    <script type="module" crossorigin src="/assets/index-BnEMO6UD.js"></script>
+    <script>
+      // Immediate App-Redirect for Android Deep Links
+      (function() {
+        var hash = window.location.hash || '';
+        var search = window.location.search || '';
+        var full = hash + ' ' + search;
+        var match = full.match(/token=([a-zA-Z0-9\-]+)/);
+        if (match && match[1]) {
+          var token = match[1];
+          // Try launching Android native app if on Android
+          if (/Android/i.test(navigator.userAgent)) {
+            window.location.href = "intent://family?token=" + encodeURIComponent(token) + "#Intent;scheme=docuvault;package=com.digivault.app;end";
+          }
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-vgFCNd6i.js"></script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"></div>
   </body>
 </html>

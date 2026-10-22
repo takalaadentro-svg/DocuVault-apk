@@ -159,12 +159,17 @@ public class FamilyService {
         return true;
     }
 
-    public void removeMember(User user, String memberUserId) {
+    public void removeMember(User user, String memberUserIdOrId) {
         FamilyGroupDetails details = getOrCreateFamilyGroup(user);
         if (!details.getOwnerId().equals(user.getId())) {
             throw new RuntimeException("Only the family locker owner can remove members.");
         }
-        familyMemberRepository.deleteByFamilyGroupIdAndUserId(details.getId(), memberUserId);
+        familyMemberRepository.deleteByFamilyGroupIdAndUserId(details.getId(), memberUserIdOrId);
+        familyMemberRepository.findById(memberUserIdOrId).ifPresent(m -> {
+            if (m.getFamilyGroupId().equals(details.getId())) {
+                familyMemberRepository.delete(m);
+            }
+        });
     }
 
     private FamilyGroupDetails getGroupDetails(FamilyGroup group) {

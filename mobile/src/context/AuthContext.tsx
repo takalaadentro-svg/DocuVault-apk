@@ -100,27 +100,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user]);
 
   const login = async (email: string, password: string) => {
-    setIsLoading(true);
-    try {
-      const res = await api.login({ email, password });
-      setUser(res.user);
-      api.setUser(res.user);
-      setIsLocked(false);
-    } finally {
-      setIsLoading(false);
-    }
+    // Note: Do not toggle global isLoading here - AuthScreen manages its own local button spinner.
+    // Setting global isLoading would unmount AuthScreen in App.tsx and cause the screen to glitch/flicker.
+    const res = await api.login({ email, password });
+    setUser(res.user);
+    api.setUser(res.user);
+    setIsLocked(false);
   };
 
   const register = async (data: { email: string; full_name: string; password: string; phone_number?: string; otp?: string }) => {
-    setIsLoading(true);
-    try {
-      const res = await api.register(data);
-      setUser(res.user);
-      api.setUser(res.user);
-      setIsLocked(false);
-    } finally {
-      setIsLoading(false);
-    }
+    const res = await api.register(data);
+    setUser(res.user);
+    api.setUser(res.user);
+    setIsLocked(false);
   };
 
   const sendOtp = async (email: string, purpose?: string) => {

@@ -60,13 +60,18 @@ export const AuthScreen: React.FC = () => {
       setResendTimer(60);
       if (res.dev_code) {
         setDevOtpHint(res.dev_code);
-        setSuccessMessage(`Verification code generated: ${res.dev_code}`);
+        setSuccessMessage(`Verification code: ${res.dev_code} (also sent to ${email.trim()})`);
       } else {
         setDevOtpHint(null);
         setSuccessMessage(`Verification code sent to ${email.trim()}`);
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to send verification code. Please check your email.');
+      const msg = err?.message || '';
+      if (msg.toLowerCase().includes('already registered')) {
+        setErrorMessage('This email is already registered. Please sign in instead.');
+      } else {
+        setErrorMessage(msg || 'Failed to send verification code. Please check your email.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -117,25 +122,39 @@ export const AuthScreen: React.FC = () => {
             otp: otpCode.trim()
           });
         } catch (err: any) {
-          setErrorMessage(err.message || 'Verification failed. Please check your code.');
+          const msg = (err?.message || '').toLowerCase();
+          if (msg.includes('otp') || msg.includes('code') || msg.includes('invalid') || msg.includes('expired')) {
+            setErrorMessage('Incorrect or expired verification code. Please check your 6-digit code or tap Resend.');
+          } else {
+            setErrorMessage(err.message || 'Verification failed. Please try again.');
+          }
         } finally {
           setIsLoading(false);
         }
       }
     } else {
       // Standard Login
+      if (!email.trim() || !password) {
+        setErrorMessage('Please enter both email and password.');
+        return;
+      }
       setIsLoading(true);
       try {
         await login(email.trim(), password);
       } catch (err: any) {
-        setErrorMessage(err.message || 'Invalid email or password.');
+        const msg = (err?.message || '').toLowerCase();
+        if (msg.includes('bad credentials') || msg.includes('401') || msg.includes('unauthorized') || msg.includes('password') || msg.includes('user not found')) {
+          setErrorMessage('Invalid email or password. Please check your credentials.');
+        } else if (msg.includes('waking up') || msg.includes('timed out')) {
+          setErrorMessage('Server is waking up from standby. Please tap Sign In again in a few moments.');
+        } else {
+          setErrorMessage(err.message || 'Invalid email or password. Please try again.');
+        }
       } finally {
         setIsLoading(false);
       }
     }
   };
-
-
 
   const toggleMode = (registerMode: boolean) => {
     setIsRegister(registerMode);
@@ -195,8 +214,6 @@ export const AuthScreen: React.FC = () => {
           </p>
         </div>
 
-
-
         {/* Section Divider */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
           <div style={{ flex: 1, height: 1, backgroundColor: colors.surfaceBorder }} />
@@ -212,15 +229,16 @@ export const AuthScreen: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            padding: '10px 14px',
+            padding: '12px 14px',
             borderRadius: 12,
             backgroundColor: 'rgba(239, 68, 68, 0.15)',
             border: '1px solid #EF4444',
             color: '#FCA5A5',
             fontSize: 13,
             marginBottom: 16,
+            lineHeight: 1.4,
           }}>
-            <AlertCircle size={16} style={{ flexShrink: 0 }} />
+            <AlertCircle size={18} style={{ flexShrink: 0, color: '#EF4444' }} />
             <span>{errorMessage}</span>
           </div>
         )}
@@ -230,15 +248,16 @@ export const AuthScreen: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            padding: '10px 14px',
+            padding: '12px 14px',
             borderRadius: 12,
             backgroundColor: 'rgba(13, 148, 136, 0.15)',
             border: '1px solid #0D9488',
             color: '#5EEAD4',
             fontSize: 13,
             marginBottom: 16,
+            lineHeight: 1.4,
           }}>
-            <CheckCircle size={16} style={{ flexShrink: 0 }} />
+            <CheckCircle size={18} style={{ flexShrink: 0, color: '#14B8A6' }} />
             <span>{successMessage}</span>
           </div>
         )}
@@ -314,38 +333,6 @@ export const AuthScreen: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: colors.textMuted, marginBottom: 6 }}>
-                  Password *
-                </label>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '10px 14px',
-                  borderRadius: 12,
-                  backgroundColor: colors.surfaceCard,
-                  border: `1px solid ${colors.surfaceBorder}`,
-                }}>
-                  <Lock size={16} color={colors.textMuted} />
-                  <input
-                    type="password"
-                    required
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    style={{
-                      flex: 1,
-                      background: 'none',
-                      border: 'none',
-                      color: colors.text,
-                      fontSize: 14,
-                      outline: 'none',
-                    }}
-                  />
-                </div>
-              </div>
-
               {isRegister && (
                 <div>
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: colors.textMuted, marginBottom: 6 }}>
@@ -378,6 +365,38 @@ export const AuthScreen: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: colors.textMuted, marginBottom: 6 }}>
+                  Master Password *
+                </label>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '10px 14px',
+                  borderRadius: 12,
+                  backgroundColor: colors.surfaceCard,
+                  border: `1px solid ${colors.surfaceBorder}`,
+                }}>
+                  <Lock size={16} color={colors.textMuted} />
+                  <input
+                    type="password"
+                    required
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    style={{
+                      flex: 1,
+                      background: 'none',
+                      border: 'none',
+                      color: colors.text,
+                      fontSize: 14,
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+              </div>
 
               <button
                 type="submit"

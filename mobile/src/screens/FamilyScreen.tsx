@@ -7,6 +7,7 @@ import { FamilyGroup, FamilyInvitation, DocumentItem, EmergencyContact, Emergenc
 import { api } from '../services/api';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { showLocalNotification } from '../services/pushNotifications';
 
 interface FamilyScreenProps {
   families: FamilyGroup[];
@@ -62,6 +63,15 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
   const [isSavingContact, setIsSavingContact] = useState(false);
 
   const primaryFamily = families[0];
+
+    // Auto-accept invitation from email deep link if token is present
+  React.useEffect(() => {
+    const pendingToken = localStorage.getItem('pending_invite_token');
+    if (pendingToken) {
+      localStorage.removeItem('pending_invite_token');
+      handleRespondInvitation(pendingToken, 'ACCEPT');
+    }
+  }, []);
 
   const handleCreateFamily = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -144,6 +154,19 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
       onRefresh();
     } catch (e: any) {
       alert(e.message || 'Failed to remove contact');
+    }
+  };
+
+    const handleRemoveMember = async (memberIdOrUserId: string, name: string) => {
+    if (!confirm(`Are you sure you want to remove ${name} from this Family Vault?`)) {
+      return;
+    }
+    try {
+      await api.removeFamilyMember(memberIdOrUserId);
+      showLocalNotification('Family Vault Updated', `${name} was removed from the family vault.`);
+      onRefresh();
+    } catch (e: any) {
+      alert(e.message || 'Failed to remove member from family group');
     }
   };
 
@@ -323,56 +346,96 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {(primaryFamily.members || []).map(member => (
-                  <div
-                    key={member.id}
-                    style={{
-                      padding: 14,
-                      borderRadius: 12,
-                      backgroundColor: colors.surfaceCard,
-                      border: `1px solid ${colors.surfaceBorder}`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{
-                        width: 38,
-                        height: 38,
-                        borderRadius: 19,
-                        backgroundColor: colors.accent,
-                        color: '#FFF',
-                        fontWeight: 700,
-                        fontSize: 14,
+                {(primaryFamily.members || []).map(member => {
+                  const mName = (member as any)?.fullName || (member as any)?.full_name || (member as any)?.user_name || member?.email || 'Family Member';
+                  const mEmail = member?.email || (member as any)?.user_email || '';
+                  const mUserId = (member as any)?.userId || (member as any)?.user_id || member?.id;
+                  const isCurrent = mUserId === user?.id || (mEmail && user?.email && mEmail.toLowerCase() === user.email.toLowerCase());
+                  const isOwner = primaryFamily?.owner_id === user?.id || (primaryFamily as any)?.ownerId === user?.id;
+
+                  return (
+                    <div
+                      key={member.id || mUserId}
+                      style={{
+                        padding: 14,
+                        borderRadius: 12,
+                        backgroundColor: colors.surfaceCard,
+                        border: `1px solid ${colors.surfaceBorder}`,
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                      }}>
-                        {(member?.full_name || (member as any)?.user_name || member?.email || 'M').charAt(0).toUpperCase()}
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
+                        <div style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 20,
+                          backgroundColor: colors.accent,
+                          color: '#FFF',
+                          fontWeight: 700,
+                          fontSize: 15,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                          boxShadow: '0 2px 8px rgba(13, 148, 136, 0.3)',
+                        }}>
+                          {mName.charAt(0).toUpperCase()}
+                        </div>
+                        <div style={{ minWidth: 0, flex: 1, paddingRight: 8 }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: colors.text, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span>{mName}</span>
+                            {isCurrent && (
+                              <span style={{ fontSize: 11, fontWeight: 600, color: colors.accentLight, backgroundColor: 'rgba(13, 148, 136, 0.15)', padding: '1px 6px', borderRadius: 6 }}>
+                                You
+                              </span>
+                            )}
+                          </div>
+                          {mEmail && (
+                            <div style={{ fontSize: 12, color: colors.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {mEmail}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: colors.text }}>
-                          {member?.full_name || (member as any)?.user_name || 'Member'} {member?.user_id === user?.id ? '(You)' : ''}
-                        </div>
-                        <div style={{ fontSize: 12, color: colors.textMuted }}>
-                          {member?.email || (member as any)?.user_email || ''}
-                        </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                        <span style={{
+                          padding: '4px 10px',
+                          borderRadius: 8,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          backgroundColor: (member?.role === 'OWNER' || member?.role === 'ADMIN') ? 'rgba(13, 148, 136, 0.2)' : 'rgba(59, 130, 246, 0.15)',
+                          color: (member?.role === 'OWNER' || member?.role === 'ADMIN') ? colors.accentLight : '#3B82F6',
+                        }}>
+                          {member?.role || 'MEMBER'}
+                        </span>
+
+                        {isOwner && member?.role !== 'OWNER' && !isCurrent && (
+                          <button
+                            title={`Remove ${mName}`}
+                            onClick={() => handleRemoveMember(mUserId, mName)}
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: 8,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                              border: '1px solid rgba(239, 68, 68, 0.3)',
+                              color: '#EF4444',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
                       </div>
                     </div>
-
-                    <span style={{
-                      padding: '4px 10px',
-                      borderRadius: 8,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      backgroundColor: member?.role === 'OWNER' ? 'rgba(13, 148, 136, 0.2)' : 'rgba(59, 130, 246, 0.15)',
-                      color: member?.role === 'OWNER' ? colors.accentLight : '#3B82F6',
-                    }}>
-                      {member?.role || 'MEMBER'}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Family Document-Completeness Tracker */}

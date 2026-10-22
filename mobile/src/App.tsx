@@ -1,3 +1,5 @@
+import { App as CapApp } from '@capacitor/app';
+import { CheckCircle2 } from 'lucide-react';
 import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from './context/AuthContext';
@@ -39,6 +41,44 @@ export const AppContent: React.FC = () => {
   const [inviteFamilyId, setInviteFamilyId] = useState<string | null>(null);
   const [isEmergencyAccessOpen, setIsEmergencyAccessOpen] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 4500);
+  };
+
+  // Deep linking: Handle docuvault:// and https:// URLs
+  React.useEffect(() => {
+    const handleUrl = (urlStr: string) => {
+      try {
+        const match = urlStr.match(/token=([a-zA-Z0-9\-]+)/);
+        if (match && match[1]) {
+          const token = match[1];
+          localStorage.setItem('pending_invite_token', token);
+          setCurrentTab('family');
+          showToast('Family invitation detected! Opening Vault...');
+        }
+      } catch (e) {
+        console.warn('Deep link parse error:', e);
+      }
+    };
+
+    handleUrl(window.location.href);
+
+    let handle: any = null;
+    CapApp.addListener('appUrlOpen', (data) => {
+      if (data?.url) {
+        handleUrl(data.url);
+      }
+    }).then(h => {
+      handle = h;
+    }).catch(() => {});
+
+    return () => {
+      if (handle?.remove) handle.remove();
+    };
+  }, []);
 
   // Queries with Real-time automatic updates (every 12 seconds)
   const { data: documents = [], refetch: refetchDocs } = useQuery<DocumentItem[]>({
@@ -183,6 +223,30 @@ export const AppContent: React.FC = () => {
         borderRight: `1px solid ${colors.surfaceBorder}`,
         overflow: 'hidden',
       }}>
+        {/* Floating Toast Notification */}
+        {toastMessage && (
+          <div style={{
+            position: 'absolute',
+            top: 72,
+            left: 16,
+            right: 16,
+            zIndex: 9999,
+            backgroundColor: '#0D9488',
+            color: '#FFFFFF',
+            padding: '12px 16px',
+            borderRadius: 14,
+            boxShadow: '0 8px 24px rgba(13, 148, 136, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            fontSize: 13,
+            fontWeight: 700,
+          }}>
+            <CheckCircle2 size={20} color="#FFFFFF" style={{ flexShrink: 0 }} />
+            <span style={{ flex: 1 }}>{toastMessage}</span>
+          </div>
+        )}
+
         {/* Header (pinned at top) */}
         <div style={{ flexShrink: 0, zIndex: 30 }}>
           <Header
@@ -268,7 +332,10 @@ export const AppContent: React.FC = () => {
         <UploadModal
           isOpen={isUploadOpen}
           onClose={() => setIsUploadOpen(false)}
-          onSuccess={handleRefreshAll}
+          onSuccess={(docTitle) => {
+            handleRefreshAll();
+            showToast(`File "${docTitle || 'Document'}" successfully uploaded to your vault!`);
+          }}
         />
 
         <DocumentDetailsModal
