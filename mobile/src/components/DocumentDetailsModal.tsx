@@ -1,3 +1,7 @@
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
+import { Capacitor } from '@capacitor/core';
+import { showLocalNotification } from '../services/pushNotifications';
 import React, { useState, useEffect } from 'react';
 import { 
   X, Download, QrCode, Trash2, Edit3, ShieldAlert, 
@@ -83,17 +87,58 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
     setIsDownloading(true);
     try {
       const blob = await api.downloadDocument(doc.id);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = doc.original_filename || (doc.title ? `${doc.title}.bin` : 'document');
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+      const cleanTitle = (doc.title || 'document').replace(/[^a-zA-Z0-9._-]/g, '_');
+      const filename = doc.original_filename || `${cleanTitle}.pdf`;
+
+      if (Capacitor.isNativePlatform()) {
+        // Native Android Download: Convert Blob to base64 & save using Filesystem
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onloadend = async () => {
+          try {
+            const base64Data = (reader.result as string).split(',')[1];
+            const savedFile = await Filesystem.writeFile({
+              path: filename,
+              data: base64Data,
+              directory: Directory.Cache,
+              recursive: true,
+            });
+
+            showLocalNotification('DocuVault Download', `Downloaded: ${filename}`);
+
+            // Open Android Native Save / Share Sheet
+            const canShare = await Share.canShare().then(s => s.value).catch(() => false);
+            if (canShare) {
+              await Share.share({
+                title: doc.title || 'DocuVault Document',
+                text: `Save or view ${filename}`,
+                url: savedFile.uri,
+                dialogTitle: 'Save or View Document',
+              });
+            } else {
+              alert(`Document successfully saved to device cache: ${filename}`);
+            }
+          } catch (nativeErr: any) {
+            console.error('Filesystem write failed:', nativeErr);
+            alert('Could not save file to device: ' + (nativeErr.message || nativeErr));
+          } finally {
+            setIsDownloading(false);
+          }
+        };
+      } else {
+        // Standard Web Browser: Blob object URL
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+        setIsDownloading(false);
+      }
     } catch (err: any) {
       alert(err.message || 'Download failed');
-    } finally {
       setIsDownloading(false);
     }
   };
