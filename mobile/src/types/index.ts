@@ -292,6 +292,8 @@ export interface PhoneTransferPairing {
   expiresInSeconds: number;
   qrCodeData: string;
   documentCount: number;
+  pairing_code?: string;
+  document_count?: number;
 }
 
 export interface AutofillProfile {

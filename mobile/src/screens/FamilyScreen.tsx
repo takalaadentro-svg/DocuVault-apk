@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Users, UserPlus, ShieldAlert, HeartPulse, FileText, 
-  Check, X, Trash2, Plus, ShieldCheck, Phone, Mail, ArrowRight, Eye, AlertTriangle 
+  Check, X, Trash2, Plus, ShieldCheck, Phone, Mail, ArrowRight, Eye, AlertTriangle, KeyRound 
 } from 'lucide-react';
 import { FamilyGroup, FamilyInvitation, DocumentItem, EmergencyContact, EmergencyMedicalInfo } from '../types';
 import { api } from '../services/api';

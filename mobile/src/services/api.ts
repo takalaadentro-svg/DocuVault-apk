@@ -3,7 +3,7 @@ import {
   EmergencyContact, EmergencyMedicalInfo, ShareTokenItem, 
   SharedDocumentViewData, NotificationItem, DashboardStats, 
   AuditLogItem, DocumentPermission, OCRExtractResult, DocumentDNAVerificationResult,
-  DocumentChatResponse, DocumentPack, ConsistencyCheckResult, DuplicateCheckResult,
+  DocumentChatResponse, DocumentPack, ConsistencyCheckResult, ConsistencyIssue, DuplicateCheckResult,
   DocumentVersion, PhoneTransferPairing
 } from '../types';
 
@@ -441,35 +441,58 @@ class ApiService {
       return {
         totalDocumentsAnalyzed: 0,
         isConsistent: true,
-        issues: ['Upload documents (e.g. Aadhaar, Passport) to perform automated cross-document identity verification.'],
-        passedFields: []
+        issues: [],
+        passedFields: ['Upload documents (e.g. Aadhaar, Passport) to perform automated cross-document identity verification.']
       };
     }
 
-    const names = new Set<string>();
-    const dobs = new Set<string>();
+    const nameEntries: { title: string; name: string }[] = [];
+    const dobEntries: { title: string; dob: string }[] = [];
+
     docs.forEach(d => {
       if (d.holder_name && d.holder_name.trim().length > 1) {
-        names.add(d.holder_name.trim());
+        nameEntries.push({ title: d.title || 'Document', name: d.holder_name.trim() });
       }
       if (d.dob && d.dob.trim().length > 1) {
-        dobs.add(d.dob.trim());
+        dobEntries.push({ title: d.title || 'Document', dob: d.dob.trim() });
       }
     });
 
-    const issues: string[] = [];
+    const issues: ConsistencyIssue[] = [];
     const passedFields: string[] = [];
 
-    if (names.size > 1) {
-      issues.push(`Name variance detected across documents: ${Array.from(names).join(' vs ')}`);
-    } else if (names.size === 1) {
-      passedFields.push(`Holder Name consistently verified: ${Array.from(names)[0]}`);
+    const uniqueNames = Array.from(new Set(nameEntries.map(e => e.name)));
+    if (uniqueNames.length > 1) {
+      const first = nameEntries[0];
+      const different = nameEntries.find(e => e.name !== first.name) || nameEntries[1];
+      issues.push({
+        fieldName: 'Holder Name',
+        document1Title: first.title,
+        value1: first.name,
+        document2Title: different.title,
+        value2: different.name,
+        severity: 'WARNING',
+        advice: 'Ensure names match exactly across Aadhaar, Passport, and other identity records to prevent verification rejection.'
+      });
+    } else if (uniqueNames.length === 1) {
+      passedFields.push(`Holder Name consistently verified: ${uniqueNames[0]}`);
     }
 
-    if (dobs.size > 1) {
-      issues.push(`Date of birth discrepancy detected: ${Array.from(dobs).join(' vs ')}`);
-    } else if (dobs.size === 1) {
-      passedFields.push(`Date of Birth verified matching across records (${Array.from(dobs)[0]})`);
+    const uniqueDobs = Array.from(new Set(dobEntries.map(e => e.dob)));
+    if (uniqueDobs.length > 1) {
+      const first = dobEntries[0];
+      const different = dobEntries.find(e => e.dob !== first.dob) || dobEntries[1];
+      issues.push({
+        fieldName: 'Date of Birth',
+        document1Title: first.title,
+        value1: first.dob,
+        document2Title: different.title,
+        value2: different.dob,
+        severity: 'WARNING',
+        advice: 'Check official certificates to rectify the date of birth mismatch.'
+      });
+    } else if (uniqueDobs.length === 1) {
+      passedFields.push(`Date of Birth verified matching across records (${uniqueDobs[0]})`);
     }
 
     if (docs.length >= 2) {
@@ -750,6 +773,7 @@ class ApiService {
       expired_count: 0,
       family_members_count: 0,
       active_shares_count: 0,
+      emergency_contacts_count: 0,
     };
   }
 

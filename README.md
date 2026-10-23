@@ -266,3 +266,4 @@ Transfer this file to any Android device or share via Google Drive/WhatsApp and 
 - **Major Project**: DocuVault 2.0 — Smart Digital Document Locker & Family Emergency Vault
 - **Architecture**: Microservice-oriented, Biometric-first, Cloud-Native
 - **License**: Academic Project
+
