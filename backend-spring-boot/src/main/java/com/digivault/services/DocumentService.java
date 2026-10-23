@@ -115,7 +115,10 @@ public class DocumentService {
             record.setFileSize(file.getSize());
             record.setMimeType(file.getContentType());
             record.setSha256Hash(sha256);
-            record.setOcrText(ocrScan.getExtractedText());
+            String finalOcrText = (clientOcrText != null && clientOcrText.trim().length() > 5)
+                    ? clientOcrText.trim()
+                    : ocrScan.getExtractedText();
+            record.setOcrText(finalOcrText);
             record.setOcrConfidence(ocrScan.getConfidence());
             record.setBlurred(ocrScan.isBlurred());
             record.setNotes(notes != null ? notes : "");

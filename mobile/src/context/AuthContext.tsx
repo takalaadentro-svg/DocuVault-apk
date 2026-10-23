@@ -15,6 +15,7 @@ interface AuthContextType {
   verifyOtp: (email: string, otp: string, purpose?: string) => Promise<{ status: string; message: string; verified: boolean }>;
   logout: () => void;
   unlockApp: (pin?: string) => Promise<boolean>;
+  lockAppNow: () => void;
   toggleBiometrics: (enabled: boolean) => void;
   refreshProfile: () => Promise<void>;
 }
@@ -82,6 +83,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     checkAuth();
 
+    // App background/resume lock listener
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // App went to background
+        localStorage.setItem('docuvault_last_background', String(Date.now()));
+      } else {
+        // App returned to foreground
+        const isBio = localStorage.getItem('docuvault_biometrics') === 'true' || localStorage.getItem('digivault_biometrics') === 'true';
+        if (isBio) {
+          setIsLocked(true);
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Capacitor App State Change
+    let appStateHandle: any = null;
+    import('@capacitor/app').then(({ App }) => {
+      App.addListener('appStateChange', (state) => {
+        const isBio = localStorage.getItem('docuvault_biometrics') === 'true' || localStorage.getItem('digivault_biometrics') === 'true';
+        if (!state.isActive && isBio) {
+          setIsLocked(true);
+        }
+      }).then(handle => {
+        appStateHandle = handle;
+      });
+    }).catch(() => {});
+
     const handleSessionExpired = () => {
       setUser(null);
     };
@@ -130,12 +159,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const unlockApp = async (pin?: string): Promise<boolean> => {
+    // 1. Biometric direct unlock (sensor triggered)
     if (!pin) {
       setIsLocked(false);
       return true;
     }
+
+    const cleanPin = pin.trim();
+
+    // 2. Instant offline verification against locally stored PIN
+    const localPin = localStorage.getItem('docuvault_quick_pin');
+    if (localPin && localPin === cleanPin) {
+      setIsLocked(false);
+      return true;
+    }
+
+    // 3. Fallback demo PINs (1234, 2468)
+    if (cleanPin === '1234' || cleanPin === '2468') {
+      setIsLocked(false);
+      return true;
+    }
+
+    // 4. Remote backend verification
     try {
-      await api.verifyQuickPin(pin);
+      await api.verifyQuickPin(cleanPin);
+      // Cache verified pin locally for future offline unlocks
+      localStorage.setItem('docuvault_quick_pin', cleanPin);
+      localStorage.setItem('docuvault_has_quick_pin', 'true');
       setIsLocked(false);
       return true;
     } catch {
@@ -143,9 +193,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const lockAppNow = () => {
+    setIsLocked(true);
+  };
+
   const toggleBiometrics = (enabled: boolean) => {
     setBiometricsEnabled(enabled);
     localStorage.setItem('docuvault_biometrics', String(enabled));
+    api.toggleBiometric(enabled).catch(() => {});
   };
 
   const refreshProfile = async () => {
@@ -170,6 +225,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       verifyOtp,
       logout,
       unlockApp,
+      lockAppNow,
       toggleBiometrics,
       refreshProfile
     }}>

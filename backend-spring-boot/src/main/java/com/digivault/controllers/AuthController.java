@@ -154,4 +154,19 @@ public class AuthController {
         return ResponseEntity.ok(Collections.singletonMap("status", "success"));
     }
 
+    @PostMapping("/change-password")
+    public ResponseEntity<?> changePassword(
+            @AuthenticationPrincipal User user,
+            @Valid @RequestBody AuthDto.ChangePasswordRequest req) {
+        if (user == null) {
+            return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
+        }
+        try {
+            authService.changePassword(user, req.getOldPassword(), req.getNewPassword());
+            return ResponseEntity.ok(Collections.singletonMap("message", "Password updated successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Collections.singletonMap("detail", e.getMessage()));
+        }
+    }
+
 }

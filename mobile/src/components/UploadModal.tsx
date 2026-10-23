@@ -147,6 +147,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSuc
       formData.append('is_emergency_eligible', String(isEmergencyEligible));
       formData.append('is_family_vault', String(isFamilyVault));
       formData.append('is_offline_available', String(isOfflineAvailable));
+      if (ocrResult?.extracted_text) formData.append('ocr_text', ocrResult.extracted_text);
 
       const savedDoc = await api.uploadDocument(formData);
 

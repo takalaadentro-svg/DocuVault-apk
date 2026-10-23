@@ -59,6 +59,7 @@ public class DocumentController {
             @RequestParam(value = "doc_number", required = false) String docNumber,
             @RequestParam(value = "dob", required = false) String dob,
             @RequestParam(value = "notes", required = false) String notes,
+            @RequestParam(value = "ocr_text", required = false) String ocrText,
             @RequestParam(value = "is_family_vault", required = false, defaultValue = "false") Boolean isFamilyVault,
             @RequestParam(value = "is_emergency_eligible", required = false, defaultValue = "false") Boolean isEmergencyEligible,
             @RequestParam(value = "is_offline_available", required = false, defaultValue = "false") Boolean isOfflineAvailable,
@@ -72,7 +73,7 @@ public class DocumentController {
         try {
             DocumentResponse response = documentService.uploadDocument(
                     user, file, title, category, docType, subtype, issuer,
-                    holderName, docNumber, dob, notes,
+                    holderName, docNumber, dob, notes, ocrText,
                     isFamilyVault, isEmergencyEligible, isOfflineAvailable, expiryDate, issueDate
             );
             return ResponseEntity.ok(response);

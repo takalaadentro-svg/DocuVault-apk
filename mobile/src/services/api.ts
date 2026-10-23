@@ -1,3 +1,4 @@
+import { ClientOCRService } from './ocrService';
 import { ClientRAGService } from './ragService';
 import { 
   User, DocumentItem, FamilyGroup, FamilyInvitation, 
@@ -217,12 +218,33 @@ class ApiService {
   }
 
   async ocrExtract(file: File): Promise<OCRExtractResult> {
-    const formData = new FormData();
-    formData.append('file', file);
-    return this.request<OCRExtractResult>('/documents/ocr-extract', {
-      method: 'POST',
-      body: formData
-    });
+    // 1. Run local client OCR for instant zero-latency intelligence
+    const localOcr = await ClientOCRService.analyzeDocument(file, this.cachedUser?.full_name);
+
+    // 2. Also try backend extraction if online
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const remoteOcr = await this.request<OCRExtractResult>('/documents/ocr-extract', {
+        method: 'POST',
+        body: formData
+      });
+      if (remoteOcr && remoteOcr.extracted_text && remoteOcr.extracted_text.length > 20) {
+        return {
+          ...localOcr,
+          ...remoteOcr,
+          extracted_text: remoteOcr.extracted_text || localOcr.extracted_text,
+          holder_name: remoteOcr.holder_name || localOcr.holder_name,
+          doc_number: remoteOcr.doc_number || localOcr.doc_number,
+          dob: remoteOcr.dob || localOcr.dob,
+          expiry_date: remoteOcr.expiry_date || localOcr.expiry_date,
+        };
+      }
+    } catch (e) {
+      console.info('Using local client OCR engine result:', e);
+    }
+
+    return localOcr;
   }
 
   async verifyDocumentDna(docId: string): Promise<DocumentDNAVerificationResult> {

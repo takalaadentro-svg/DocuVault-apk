@@ -219,4 +219,18 @@ public class AuthService {
         }
     }
 
+    public boolean changePassword(User user, String oldPassword, String newPassword) {
+        if (newPassword == null || newPassword.length() < 6) {
+            throw new RuntimeException("New password must be at least 6 characters.");
+        }
+        if (user.getPassword() != null && !user.getPassword().isEmpty()) {
+            if (oldPassword == null || !passwordEncoder.matches(oldPassword, user.getPassword())) {
+                throw new RuntimeException("Current password does not match.");
+            }
+        }
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+        return true;
+    }
+
 }

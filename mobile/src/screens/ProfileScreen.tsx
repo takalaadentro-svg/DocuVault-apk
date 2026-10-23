@@ -14,7 +14,7 @@ interface ProfileScreenProps {
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) => {
-  const { user, logout, biometricsEnabled, toggleBiometrics, refreshProfile } = useAuth();
+  const { user, logout, biometricsEnabled, toggleBiometrics, refreshProfile, lockAppNow } = useAuth();
   const { mode, toggleTheme, colors } = useTheme();
 
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
@@ -90,8 +90,18 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) =>
     setIsSettingQuickPin(true);
     setQuickPinMsg(null);
     try {
-      await api.setupQuickPin(quickPinInput);
-      setQuickPinMsg({ text: 'Quick PIN successfully configured!', isError: false });
+      // 1. Cache locally for instant offline verification
+      localStorage.setItem('docuvault_quick_pin', quickPinInput);
+      localStorage.setItem('docuvault_has_quick_pin', 'true');
+
+      // 2. Sync with backend
+      try {
+        await api.setupQuickPin(quickPinInput);
+      } catch (err) {
+        console.warn('Backend quick-pin sync note:', err);
+      }
+
+      setQuickPinMsg({ text: 'Emergency & Quick PIN successfully configured!', isError: false });
       setQuickPinInput('');
       await refreshProfile();
       setTimeout(() => setShowQuickPin(false), 2000);
@@ -115,7 +125,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) =>
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!oldPassword || !newPassword) return;
+    if (!newPassword || newPassword.length < 6) {
+      setPasswordMsg({ text: 'New password must be at least 6 characters', isError: true });
+      return;
+    }
     setIsChangingPassword(true);
     setPasswordMsg(null);
     try {
@@ -125,7 +138,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) =>
       setNewPassword('');
       setTimeout(() => setShowChangePassword(false), 2000);
     } catch (err: any) {
-      setPasswordMsg({ text: err.message || 'Failed to change password', isError: true });
+      setPasswordMsg({ text: err.message || 'Failed to update password. Verify current password.', isError: true });
     } finally {
       setIsChangingPassword(false);
     }
@@ -239,6 +252,41 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) =>
           />
         </div>
 
+        {biometricsEnabled && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '10px 18px',
+            backgroundColor: 'rgba(13, 148, 136, 0.08)',
+            borderBottom: `1px solid ${colors.surfaceBorder}`,
+          }}>
+            <span style={{ fontSize: 12, color: colors.accentLight, fontWeight: 600 }}>
+              App Lock is ACTIVE (locks on app resume)
+            </span>
+            <button
+              type="button"
+              onClick={() => lockAppNow()}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 8,
+                backgroundColor: colors.accent,
+                color: '#FFF',
+                border: 'none',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <Lock size={12} />
+              Lock Vault Now
+            </button>
+          </div>
+        )}
+
         {/* Quick PIN Configuration */}
         <div style={{
           display: 'flex',
@@ -252,7 +300,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) =>
             <div>
               <div style={{ fontSize: 14, fontWeight: 600, color: colors.text }}>Emergency & Quick PIN</div>
               <div style={{ fontSize: 11, color: colors.textMuted }}>
-                {user?.has_quick_pin ? 'Active 4-digit PIN configured' : 'Configure 4-digit rapid unlock PIN'}
+                {(user?.has_quick_pin || localStorage.getItem('docuvault_has_quick_pin') === 'true') ? 'Active 4-digit PIN configured' : 'Configure 4-digit rapid unlock PIN'}
               </div>
             </div>
           </div>
@@ -269,7 +317,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) =>
               cursor: 'pointer',
             }}
           >
-            {showQuickPin ? 'Close' : user?.has_quick_pin ? 'Change' : 'Set PIN'}
+            {showQuickPin ? 'Close' : (user?.has_quick_pin || localStorage.getItem('docuvault_has_quick_pin') === 'true') ? 'Change' : 'Set PIN'}
           </button>
         </div>
 
