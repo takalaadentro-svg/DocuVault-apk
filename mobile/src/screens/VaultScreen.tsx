@@ -1,3 +1,4 @@
+import { speechService } from '../services/speech';
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search, Plus, Filter, FileText, ArrowUpDown, 
@@ -48,62 +49,45 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
 
   // Initialize Speech Recognition for Voice Search
   useEffect(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-
-      recognition.onstart = () => {
-        setIsListening(true);
-        setVoiceNotice('Listening to your voice command... Speak document name');
-      };
-
-      recognition.onresult = (event: any) => {
-        const transcript = Array.from(event.results)
-          .map((result: any) => result[0])
-          .map((result: any) => result.transcript)
-          .join('');
-        setSearchQuery(transcript);
-        setVoiceNotice(`Searching for: "${transcript}"`);
-      };
-
-      recognition.onerror = (event: any) => {
-        setIsListening(false);
-        setVoiceNotice('Voice recognition paused. Try typing or speaking again.');
-        setTimeout(() => setVoiceNotice(null), 3000);
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-        setTimeout(() => setVoiceNotice(null), 2500);
-      };
-
-      recognitionRef.current = recognition;
-    }
+    return () => {
+      speechService.stopListening();
+    };
   }, []);
 
-  const toggleVoiceSearch = () => {
+  const toggleVoiceSearch = async () => {
     if (isListening) {
-      recognitionRef.current?.stop();
+      speechService.stopListening();
       setIsListening(false);
       setVoiceNotice(null);
     } else {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.start();
-        } catch {
-          // If already started or blocked, fallback
+      setIsListening(true);
+      setVoiceNotice('Requesting microphone... Speak document name');
+
+      const started = await speechService.startListening({
+        onStart: () => {
+          setIsListening(true);
+          setVoiceNotice('Listening... Speak document name (e.g. Passport, Aadhaar)');
+        },
+        onTranscript: (transcript: string, isFinal: boolean) => {
+          setSearchQuery(transcript);
+          setVoiceNotice(`Heard: "${transcript}"`);
+          if (isFinal) {
+            setTimeout(() => setVoiceNotice(null), 2500);
+          }
+        },
+        onError: (errMsg: string) => {
           setIsListening(false);
+          setVoiceNotice(errMsg);
+          setTimeout(() => setVoiceNotice(null), 3500);
+        },
+        onEnd: () => {
+          setIsListening(false);
+          setTimeout(() => setVoiceNotice(null), 2000);
         }
-      } else {
-        // Fallback simulated voice search options for browsers without Web Speech API
-        const sampleVoiceQueries = ['Passport', 'Aadhaar', 'Health Insurance', 'Sale Deed', 'Degree'];
-        const randomQuery = sampleVoiceQueries[Math.floor(Math.random() * sampleVoiceQueries.length)];
-        setVoiceNotice(`Simulated Voice Input: "${randomQuery}"`);
-        setSearchQuery(randomQuery);
-        setTimeout(() => setVoiceNotice(null), 3000);
+      });
+
+      if (!started) {
+        setIsListening(false);
       }
     }
   };

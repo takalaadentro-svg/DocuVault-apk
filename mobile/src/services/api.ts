@@ -1,3 +1,4 @@
+import { ClientRAGService } from './ragService';
 import { 
   User, DocumentItem, FamilyGroup, FamilyInvitation, 
   EmergencyContact, EmergencyMedicalInfo, ShareTokenItem, 
@@ -289,11 +290,28 @@ class ApiService {
     return response.blob();
   }
 
-  async chatWithDocuments(question: string): Promise<DocumentChatResponse> {
-    return this.request<DocumentChatResponse>('/documents/chat', {
-      method: 'POST',
-      body: JSON.stringify({ question })
-    });
+  async chatWithDocuments(question: string, localDocs?: DocumentItem[]): Promise<DocumentChatResponse> {
+    try {
+      const response = await this.request<DocumentChatResponse>('/documents/chat', {
+        method: 'POST',
+        body: JSON.stringify({ question })
+      });
+      if (response && response.infoFound) {
+        return response;
+      }
+    } catch (e) {
+      console.warn('Backend RAG unreachable, using client RAG engine:', e);
+    }
+
+    let docs = localDocs;
+    if (!docs || docs.length === 0) {
+      try {
+        docs = await this.getDocuments();
+      } catch (e) {
+        docs = [];
+      }
+    }
+    return ClientRAGService.query(question, docs);
   }
 
   async setupQuickPin(pin: string) {

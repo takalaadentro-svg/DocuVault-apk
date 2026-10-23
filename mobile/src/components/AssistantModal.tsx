@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, MessageSquare, Briefcase, FileCheck, Copy, Check, Sparkles, 
-  Send, AlertCircle, ShieldAlert, ArrowRight, ExternalLink, RefreshCw, FileText
+  Send, AlertCircle, ShieldAlert, ArrowRight, ExternalLink, RefreshCw, FileText, Mic, MicOff
 } from 'lucide-react';
+import { speechService } from '../services/speech';
 import { useTheme } from '../context/ThemeContext';
 import { api } from '../services/api';
 import { DocumentPack, ConsistencyCheckResult, DocumentChatResponse, DocumentItem } from '../types';
@@ -50,6 +51,61 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({
   // Autofill State
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
+  // Speech State
+  const [isListening, setIsListening] = useState(false);
+  const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      speechService.stopListening();
+    };
+  }, []);
+
+  const toggleVoiceInput = async () => {
+    if (isListening) {
+      speechService.stopListening();
+      setIsListening(false);
+      setVoiceNotice(null);
+    } else {
+      setIsListening(true);
+      setVoiceNotice('Listening to your question... Speak clearly');
+
+      const started = await speechService.startListening({
+        onStart: () => {
+          setIsListening(true);
+          setVoiceNotice('Listening... Speak your question');
+        },
+        onTranscript: (transcript: string, isFinal: boolean) => {
+          setQuestion(transcript);
+          setVoiceNotice(`Heard: "${transcript}"`);
+          if (isFinal) {
+            setTimeout(() => {
+              setVoiceNotice(null);
+              setIsListening(false);
+              // auto-send if complete question
+              if (transcript.length > 5) {
+                handleSendQuestion(transcript);
+              }
+            }, 1000);
+          }
+        },
+        onError: (errMsg: string) => {
+          setIsListening(false);
+          setVoiceNotice(errMsg);
+          setTimeout(() => setVoiceNotice(null), 3500);
+        },
+        onEnd: () => {
+          setIsListening(false);
+          setTimeout(() => setVoiceNotice(null), 2000);
+        }
+      });
+
+      if (!started) {
+        setIsListening(false);
+      }
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       if (activeTab === 'packs' && packs.length === 0) loadPacks();
@@ -91,7 +147,7 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({
     setIsAsking(true);
 
     try {
-      const response: DocumentChatResponse = await api.chatWithDocuments(q);
+      const response: DocumentChatResponse = await api.chatWithDocuments(q, documents);
       setChatMessages(prev => [
         ...prev,
         {
@@ -297,7 +353,7 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({
 
               {/* Sample Prompts */}
               <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '8px 0', borderTop: `1px solid ${colors.surfaceBorder}` }}>
-                {['When does my passport expire?', 'What is my PAN card number?', 'Find degree graduation status'].map(preset => (
+                {['What documents do I have?', 'When does my passport expire?', 'What is my Aadhaar number?', 'What is my Date of Birth?'].map(preset => (
                   <button
                     key={preset}
                     onClick={() => handleSendQuestion(preset)}
@@ -318,11 +374,30 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({
                 ))}
               </div>
 
-              {/* Input bar */}
+              {voiceNotice && (
+                <div style={{
+                  fontSize: 12,
+                  color: colors.accentLight,
+                  padding: '6px 12px',
+                  backgroundColor: 'rgba(13, 148, 136, 0.12)',
+                  borderRadius: 10,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  marginTop: 6,
+                  border: `1px solid ${colors.accent}`,
+                  animation: 'pulse 1.5s infinite',
+                }}>
+                  <Sparkles size={14} />
+                  <span>{voiceNotice}</span>
+                </div>
+              )}
+
+              {/* Input bar with Voice Input Mic */}
               <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
                 <input
                   type="text"
-                  placeholder="Ask any question about your documents..."
+                  placeholder={isListening ? "Listening to your voice..." : "Ask any question about your documents..."}
                   value={question}
                   onChange={e => setQuestion(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleSendQuestion()}
@@ -331,12 +406,36 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({
                     padding: '12px 16px',
                     borderRadius: 14,
                     backgroundColor: colors.bg,
-                    border: `1px solid ${colors.surfaceBorder}`,
+                    border: `1px solid ${isListening ? colors.accent : colors.surfaceBorder}`,
+                    boxShadow: isListening ? '0 0 12px rgba(13, 148, 136, 0.4)' : 'none',
                     color: colors.text,
                     fontSize: 14,
                     outline: 'none',
                   }}
                 />
+
+                {/* Voice Input Button */}
+                <button
+                  type="button"
+                  onClick={toggleVoiceInput}
+                  title={isListening ? "Stop Voice Input" : "Speak your Question"}
+                  style={{
+                    padding: '12px 14px',
+                    borderRadius: 14,
+                    backgroundColor: isListening ? '#EF4444' : colors.surface,
+                    border: `1px solid ${colors.surfaceBorder}`,
+                    color: isListening ? '#FFFFFF' : colors.accentLight,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.2s ease',
+                    animation: isListening ? 'pulse 1.2s infinite' : 'none',
+                  }}
+                >
+                  {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+                </button>
+
                 <button
                   onClick={() => handleSendQuestion()}
                   disabled={!question.trim() || isAsking}
