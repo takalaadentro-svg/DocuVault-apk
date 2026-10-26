@@ -13,6 +13,7 @@ import { DocumentItem, DocumentDNAVerificationResult, DocumentVersion } from '..
 import { api } from '../services/api';
 import { previewCache } from '../services/previewCache';
 import { useTheme } from '../context/ThemeContext';
+import { PDFPreviewViewer } from './PDFPreviewViewer';
 
 interface DocumentDetailsModalProps {
   document: DocumentItem | null;
@@ -746,104 +747,15 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
                     />
                   </div>
                 ) : isPdf ? (
-                  Capacitor.isNativePlatform() ? (
-                    /* Native Android PDF View Box */
-                    <div style={{ textAlign: 'center', padding: 24, width: '100%', maxWidth: 420 }}>
-                      <div style={{
-                        width: 64,
-                        height: 64,
-                        borderRadius: 16,
-                        backgroundColor: 'rgba(239, 68, 68, 0.12)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        margin: '0 auto 16px',
-                        color: '#EF4444',
-                      }}>
-                        <FileText size={32} />
-                      </div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: colors.text }}>{doc.title || 'PDF Document'}</div>
-                      <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 4 }}>
-                        {doc.original_filename || 'document.pdf'} • {((doc.file_size || 0) / 1024).toFixed(1)} KB
-                      </div>
-
-                      <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        <button
-                          onClick={handleOpenInNativeViewer}
-                          disabled={pdfNativeOpening}
-                          style={{
-                            padding: '12px 20px',
-                            borderRadius: 12,
-                            backgroundColor: colors.accent,
-                            color: '#FFF',
-                            border: 'none',
-                            fontWeight: 700,
-                            fontSize: 14,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 8,
-                            boxShadow: '0 4px 12px rgba(13, 148, 136, 0.3)',
-                          }}
-                        >
-                          {pdfNativeOpening ? (
-                            <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
-                          ) : (
-                            <ExternalLink size={18} />
-                          )}
-                          <span>Open in System PDF Viewer</span>
-                        </button>
-
-                        <button
-                          onClick={handleDownload}
-                          disabled={isDownloading}
-                          style={{
-                            padding: '10px 16px',
-                            borderRadius: 12,
-                            backgroundColor: colors.surface,
-                            border: `1px solid ${colors.surfaceBorder}`,
-                            color: colors.text,
-                            fontWeight: 600,
-                            fontSize: 13,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 6,
-                          }}
-                        >
-                          <Download size={16} />
-                          <span>Download PDF to Device</span>
-                        </button>
-                      </div>
-
-                      {doc.ocr_text && (
-                        <div style={{
-                          marginTop: 20,
-                          textAlign: 'left',
-                          backgroundColor: colors.surface,
-                          borderRadius: 10,
-                          padding: 12,
-                          border: `1px solid ${colors.surfaceBorder}`,
-                        }}>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: colors.textMuted, textTransform: 'uppercase', marginBottom: 6 }}>
-                            OCR Extracted Text Snippet
-                          </div>
-                          <div style={{ fontSize: 12, color: colors.text, maxHeight: 100, overflowY: 'auto', whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
-                            {doc.ocr_text.slice(0, 300)}...
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    /* Web Browser Embedded PDF View */
-                    <iframe
-                      src={`${blobPreview || previewUrl}#toolbar=0`}
-                      title={doc.title}
-                      style={{ width: '100%', height: '100%', border: 'none', minHeight: 460 }}
-                    />
-                  )
+                  <PDFPreviewViewer
+                    blob={previewCache.get(doc.id)?.blob || null}
+                    url={blobPreview || previewUrl}
+                    docTitle={doc.title}
+                    onOpenExternal={handleOpenInNativeViewer}
+                    onDownload={handleDownload}
+                    isOpeningExternal={pdfNativeOpening}
+                    isDownloading={isDownloading}
+                  />
                 ) : (
                   <div style={{ textAlign: 'center', padding: 30 }}>
                     <FileText size={48} color={colors.accentLight} style={{ margin: '0 auto 12px' }} />
