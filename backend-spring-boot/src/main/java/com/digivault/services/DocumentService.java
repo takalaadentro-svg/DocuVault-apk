@@ -118,9 +118,13 @@ public class DocumentService {
             if (fileBytes != null && fileBytes.length < 12 * 1024 * 1024) {
                 record.setBase64Data(Base64.getEncoder().encodeToString(fileBytes));
             }
-            String finalOcrText = (clientOcrText != null && clientOcrText.trim().length() > 5)
+            String rawOcr = (clientOcrText != null && clientOcrText.trim().length() > 5)
                     ? clientOcrText.trim()
                     : ocrScan.getExtractedText();
+            String finalOcrText = DocumentChatService.cleanDocumentText(rawOcr);
+            if (finalOcrText.isEmpty() && rawOcr != null && !DocumentChatService.isGarbageText(rawOcr)) {
+                finalOcrText = rawOcr.trim();
+            }
             record.setOcrText(finalOcrText);
             record.setOcrConfidence(ocrScan.getConfidence());
             record.setBlurred(ocrScan.isBlurred());

@@ -194,17 +194,28 @@ export class ClientOCRService {
         `Policy Number: ${docNumber}`,
         `Coverage Period: Valid through ${expiryDate}`
       );
-    } else if (lowerName.includes('degree') || lowerName.includes('certificate') || lowerName.includes('diploma') || lowerName.includes('marksheet')) {
+    } else if (
+      lowerName.includes('degree') || 
+      lowerName.includes('certificate') || 
+      lowerName.includes('diploma') || 
+      lowerName.includes('marksheet') ||
+      lowerName.includes('college') ||
+      lowerName.includes('engineering') ||
+      lowerName.includes('university') ||
+      lowerName.includes('institute') ||
+      lowerName.includes('school') ||
+      lowerName.includes('academy')
+    ) {
       category = 'Education';
       docType = 'Academic Record';
-      subtype = 'Degree Certificate';
-      issuer = 'University Senate & Examination Council';
+      subtype = 'College / University Record';
+      issuer = cleanName;
       docNumber = 'REG/' + new Date().getFullYear() + '/' + Math.floor(10000 + Math.random() * 89999);
-      confidence = 0.92;
+      confidence = 0.95;
 
       extractedLines.push(
-        'Issuing Authority: Academic Institution Examination Directorate',
-        'Document Classification: Verified Degree & Academic Credential',
+        `Issuing Institution: ${cleanName}`,
+        'Document Classification: Verified Educational Record & Credential',
         `Enrollment Roll Number: ${docNumber}`
       );
     } else if (lowerName.includes('deed') || lowerName.includes('sale') || lowerName.includes('property') || lowerName.includes('lease') || lowerName.includes('rent')) {

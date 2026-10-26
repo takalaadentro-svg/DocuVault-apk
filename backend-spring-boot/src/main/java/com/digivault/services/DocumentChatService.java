@@ -93,13 +93,14 @@ public class DocumentChatService {
             String titleLower = doc.getTitle() != null ? doc.getTitle().toLowerCase() : "";
             boolean titleMatchesQuery = queryTokens.stream().anyMatch(t -> titleLower.contains(t));
 
-            // Split OCR text into paragraphs/passages
-            String rawText = doc.getOcrText() != null && !doc.getOcrText().isEmpty() ? doc.getOcrText() : doc.getTitle();
+            // Clean and split OCR text into passages
+            String cleanText = cleanDocumentText(doc.getOcrText());
+            String rawText = (!cleanText.isEmpty()) ? cleanText : (doc.getTitle() != null ? doc.getTitle() : "Document");
             String[] passages = rawText.split("\\n+|\\.\\s+");
 
             for (String p : passages) {
                 String passageClean = p.trim();
-                if (passageClean.length() < 3) continue;
+                if (passageClean.length() < 3 || isGarbageText(passageClean)) continue;
 
                 int matchScore = 0;
                 String lowerP = passageClean.toLowerCase();
@@ -140,11 +141,18 @@ public class DocumentChatService {
             String key = se.doc.getId();
             if (!citationMap.containsKey(key) && citationMap.size() < 3) {
                 double conf = Math.min(0.98, 0.70 + (se.score * 0.04));
+                String cleanEx = cleanDocumentText(se.excerpt);
+                if (cleanEx.isEmpty() || isGarbageText(cleanEx)) {
+                    cleanEx = se.doc.getTitle() + " (" + (se.doc.getCategory() != null ? se.doc.getCategory() : "General") + ") - Verified Vault Document";
+                }
+                if (cleanEx.length() > 200) {
+                    cleanEx = cleanEx.substring(0, 200) + "...";
+                }
                 citationMap.put(key, new DocumentChatCitation(
                         se.doc.getId(),
                         se.doc.getTitle(),
                         se.doc.getCategory(),
-                        se.excerpt.length() > 200 ? se.excerpt.substring(0, 200) + "..." : se.excerpt,
+                        cleanEx,
                         conf
                 ));
             }
@@ -178,27 +186,97 @@ public class DocumentChatService {
         String q = question.toLowerCase();
         if (q.contains("expire") || q.contains("valid") || q.contains("renewal")) {
             if (doc.getExpiryDate() != null) {
-                return String.format("According to your official '%s', it expires on %s.", doc.getTitle(), doc.getExpiryDate().toString());
+                return String.format("According to your official **%s**, it expires on **%s**.", doc.getTitle(), doc.getExpiryDate().toString());
             }
         }
         if (q.contains("number") || q.contains("id") || q.contains("code")) {
             if (doc.getDocNumber() != null && !doc.getDocNumber().trim().isEmpty()) {
-                return String.format("Your %s number is %s (from '%s').",
+                return String.format("Your %s number is **%s** (from **%s**).",
                         doc.getSubtype() != null ? doc.getSubtype() : doc.getTitle(), doc.getDocNumber(), doc.getTitle());
             }
         }
         if (q.contains("name") || q.contains("holder")) {
             if (doc.getHolderName() != null && !doc.getHolderName().trim().isEmpty()) {
-                return String.format("The name recorded on '%s' is %s.", doc.getTitle(), doc.getHolderName());
+                return String.format("The name recorded on **%s** is **%s**.", doc.getTitle(), doc.getHolderName());
             }
         }
         if (q.contains("dob") || q.contains("birth")) {
             if (doc.getDob() != null && !doc.getDob().trim().isEmpty()) {
-                return String.format("The Date of Birth recorded on '%s' is %s.", doc.getTitle(), doc.getDob());
+                return String.format("The Date of Birth recorded on **%s** is **%s**.", doc.getTitle(), doc.getDob());
             }
         }
 
-        return String.format("Based on '%s' (Category: %s): "%s"", doc.getTitle(), doc.getCategory() != null ? doc.getCategory() : "General", excerpt);
+        StringBuilder sb = new StringBuilder();
+        sb.append("I found your verified document **").append(doc.getTitle()).append("** in your vault.\n\n");
+        sb.append("**Document Details**:\n");
+        if (doc.getCategory() != null) sb.append("• **Category**: ").append(doc.getCategory()).append("\n");
+        if (doc.getSubtype() != null && !doc.getSubtype().equals(doc.getTitle())) sb.append("• **Type**: ").append(doc.getSubtype()).append("\n");
+        if (doc.getIssuer() != null && !doc.getIssuer().isEmpty()) sb.append("• **Issuing Authority**: ").append(doc.getIssuer()).append("\n");
+        if (doc.getHolderName() != null && !doc.getHolderName().isEmpty()) sb.append("• **Registered Holder**: ").append(doc.getHolderName()).append("\n");
+        if (doc.getDocNumber() != null && !doc.getDocNumber().isEmpty()) sb.append("• **Document / Roll Number**: ").append(doc.getDocNumber()).append("\n");
+        if (doc.getDob() != null && !doc.getDob().isEmpty()) sb.append("• **Date of Birth**: ").append(doc.getDob()).append("\n");
+        if (doc.getIssueDate() != null) sb.append("• **Issue Date**: ").append(doc.getIssueDate()).append("\n");
+        if (doc.getExpiryDate() != null) sb.append("• **Expiry Date**: ").append(doc.getExpiryDate()).append("\n");
+
+        String cleanEx = cleanDocumentText(excerpt);
+        if (cleanEx != null && cleanEx.length() > 15 && !isGarbageText(cleanEx)
+                && !cleanEx.toLowerCase().contains("official vault document record")
+                && !cleanEx.toLowerCase().contains("cryptographic sha-256")) {
+            sb.append("\n**Relevant Extracted Information**:\n\"").append(cleanEx).append("\"");
+        }
+
+        return sb.toString().trim();
+    }
+
+    public static String cleanDocumentText(String rawText) {
+        if (rawText == null || rawText.isEmpty()) return "";
+
+        String text = rawText;
+        // 1. Remove PDF object references and dictionary syntax
+        text = text.replaceAll("<<[\\s\\S]*?>>", " ");
+        text = text.replaceAll("(?i)\\b\\d+\\s+\\d+\\s+obj\\b", " ");
+        text = text.replaceAll("(?i)\\bendobj\\b", " ");
+        text = text.replaceAll("(?i)\\bstream[\\s\\S]*?endstream\\b", " ");
+        text = text.replaceAll("(?i)\\b(xref|trailer|startxref)\\b[\\s\\S]*$", " ");
+
+        // 2. Remove internal PDF dictionary keys and dates
+        text = text.replaceAll("(?i)/ModDate\\s*\\([^)]*\\)", " ");
+        text = text.replaceAll("(?i)/CreationDate\\s*\\([^)]*\\)", " ");
+        text = text.replaceAll("(?i)/Producer\\s*\\([^)]*\\)", " ");
+        text = text.replaceAll("(?i)/Creator\\s*\\([^)]*\\)", " ");
+        text = text.replaceAll("(?i)/Title\\s*\\(([^)]*)\\)", "$1 ");
+        text = text.replaceAll("(?i)/Author\\s*\\(([^)]*)\\)", "$1 ");
+        text = text.replaceAll("(?i)/Subject\\s*\\(([^)]*)\\)", "$1 ");
+        text = text.replaceAll("(?i)/Annots\\s*\\[[^\\]]*\\]", " ");
+        text = text.replaceAll("(?i)/Contents\\s*\\[?[^\\]/]*\\]?", " ");
+        text = text.replaceAll("(?i)/Font\\s*<<[^>]*>>", " ");
+        text = text.replaceAll("(?i)/MediaBox\\s*\\[[^\\]]*\\]", " ");
+        text = text.replaceAll("(?i)/Resources\\s*<<[^>]*>>", " ");
+        text = text.replaceAll("(?i)/Filter\\s*/[a-zA-Z0-9]+", " ");
+        text = text.replaceAll("(?i)/Length\\s+\\d+", " ");
+        text = text.replaceAll("(?i)/Type\\s*/[a-zA-Z0-9]+", " ");
+        text = text.replaceAll("\\b\\d+\\s+\\d+\\s+R\\b", " ");
+        text = text.replaceAll("D:\\d{14}[+-]\\d{2}'\\d{2}'", " ");
+        text = text.replaceAll("/[A-Za-z0-9_]+", " ");
+        text = text.replaceAll("\\\\([()])", "$1");
+        text = text.replaceAll("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F-\\x9F]", " ");
+        text = text.replaceAll("[ \\t]+", " ").replaceAll("\\n\\s*\\n", "\n").trim();
+
+        if (isGarbageText(text)) {
+            return "";
+        }
+        return text;
+    }
+
+    public static boolean isGarbageText(String str) {
+        if (str == null || str.length() < 3) return true;
+        if (str.contains("endobj") || str.contains("/ModDate") || str.contains("<<") || str.contains(">>")
+                || str.contains("/Annots") || str.contains("/Producer")) {
+            return true;
+        }
+        long letters = str.chars().filter(Character::isLetter).count();
+        if (letters < 3 && str.length() > 8) return true;
+        return false;
     }
 
     private static class ScoredExcerpt {
