@@ -1,5 +1,7 @@
 package com.digivault.models;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
@@ -16,10 +18,22 @@ public class EmergencyContact {
     @Indexed
     private String userId;
 
+    @JsonProperty("name")
     private String name;
+
+    @JsonProperty("relationship")
+    @JsonAlias({"relationship_type", "relationshipType"})
     private String relationship;
+
+    @JsonProperty("phone")
+    @JsonAlias({"phone_number", "phoneNumber", "mobile"})
     private String phone;
+
+    @JsonProperty("email")
     private String email;
+
+    @JsonProperty("can_access_emergency_docs")
+    @JsonAlias({"canAccessEmergencyDocs", "can_access_medical"})
     private boolean canAccessEmergencyDocs = true;
 
     @CreatedDate
@@ -47,8 +61,16 @@ public class EmergencyContact {
     public String getRelationship() { return relationship; }
     public void setRelationship(String relationship) { this.relationship = relationship; }
 
+    @JsonProperty("relationship_type")
+    public String getRelationshipType() { return relationship; }
+    public void setRelationshipType(String relationshipType) { this.relationship = relationshipType; }
+
     public String getPhone() { return phone; }
     public void setPhone(String phone) { this.phone = phone; }
+
+    @JsonProperty("phone_number")
+    public String getPhoneNumber() { return phone; }
+    public void setPhoneNumber(String phoneNumber) { this.phone = phoneNumber; }
 
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
@@ -59,3 +81,4 @@ public class EmergencyContact {
     public Date getCreatedAt() { return createdAt; }
     public void setCreatedAt(Date createdAt) { this.createdAt = createdAt; }
 }
+

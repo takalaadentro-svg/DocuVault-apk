@@ -1043,18 +1043,40 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
                       {contact.phone_number || (contact as any).phone || ''} {contact.email ? `• ${contact.email}` : ''}
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleDeleteEmergencyContact(contact.id)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: colors.danger,
-                      cursor: 'pointer',
-                      padding: 6,
-                    }}
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {(contact.phone_number || (contact as any).phone) && (
+                      <a
+                        href={`tel:${contact.phone_number || (contact as any).phone}`}
+                        style={{
+                          padding: '6px 10px',
+                          borderRadius: 8,
+                          backgroundColor: '#10B981',
+                          color: '#FFF',
+                          textDecoration: 'none',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
+                      >
+                        <Phone size={12} />
+                        <span>Call</span>
+                      </a>
+                    )}
+                    <button
+                      onClick={() => handleDeleteEmergencyContact(contact.id)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: colors.danger,
+                        cursor: 'pointer',
+                        padding: 6,
+                      }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

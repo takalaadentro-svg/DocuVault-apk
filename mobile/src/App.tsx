@@ -366,8 +366,16 @@ export const AppContent: React.FC = () => {
 
         <EmergencyAccessModal
           contacts={emergencyContacts}
+          medicalInfo={medicalInfo}
+          documents={documents}
           isOpen={isEmergencyAccessOpen}
           onClose={() => setIsEmergencyAccessOpen(false)}
+          onRefresh={handleRefreshAll}
+          onOpenDocument={doc => setSelectedDocForDetails(doc)}
+          onOpenUpload={() => {
+            setIsEmergencyAccessOpen(false);
+            setIsUploadOpen(true);
+          }}
         />
 
         <AssistantModal

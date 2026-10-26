@@ -67,10 +67,14 @@ public class EmergencyService {
                 .orElse(new EmergencyMedicalInfo());
 
         info.setUserId(user.getId());
-        info.setBloodGroup(req.getBloodGroup());
-        info.setAllergies(req.getAllergies());
-        info.setChronicConditions(req.getChronicConditions());
-        info.setEmergencyNotes(req.getEmergencyNotes());
+        if (req.getBloodGroup() != null) info.setBloodGroup(req.getBloodGroup());
+        if (req.getAllergies() != null) info.setAllergies(req.getAllergies());
+        if (req.getChronicConditions() != null) info.setChronicConditions(req.getChronicConditions());
+        if (req.getCurrentMedications() != null) info.setCurrentMedications(req.getCurrentMedications());
+        if (req.getEmergencyNotes() != null) info.setEmergencyNotes(req.getEmergencyNotes());
+        if (req.getPhysicianName() != null) info.setPhysicianName(req.getPhysicianName());
+        if (req.getPhysicianPhone() != null) info.setPhysicianPhone(req.getPhysicianPhone());
+        if (req.getOrganDonor() != null) info.setOrganDonor(req.getOrganDonor());
         info.setUpdatedAt(new Date());
 
         return emergencyMedicalInfoRepository.save(info);

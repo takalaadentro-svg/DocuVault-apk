@@ -1,5 +1,7 @@
 package com.digivault.models;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.mongodb.core.index.Indexed;
@@ -16,10 +18,36 @@ public class EmergencyMedicalInfo {
     @Indexed(unique = true)
     private String userId;
 
+    @JsonProperty("blood_group")
+    @JsonAlias({"bloodGroup"})
     private String bloodGroup;
+
+    @JsonProperty("allergies")
     private String allergies;
+
+    @JsonProperty("chronic_conditions")
+    @JsonAlias({"chronicConditions"})
     private String chronicConditions;
+
+    @JsonProperty("current_medications")
+    @JsonAlias({"currentMedications", "medications"})
+    private String currentMedications;
+
+    @JsonProperty("emergency_notes")
+    @JsonAlias({"emergencyNotes", "notes"})
     private String emergencyNotes;
+
+    @JsonProperty("physician_name")
+    @JsonAlias({"physicianName", "doctorName"})
+    private String physicianName;
+
+    @JsonProperty("physician_phone")
+    @JsonAlias({"physicianPhone", "doctorPhone"})
+    private String physicianPhone;
+
+    @JsonProperty("organ_donor")
+    @JsonAlias({"organDonor"})
+    private Boolean organDonor = false;
 
     @LastModifiedDate
     private Date updatedAt = new Date();
@@ -49,9 +77,23 @@ public class EmergencyMedicalInfo {
     public String getChronicConditions() { return chronicConditions; }
     public void setChronicConditions(String chronicConditions) { this.chronicConditions = chronicConditions; }
 
+    public String getCurrentMedications() { return currentMedications; }
+    public void setCurrentMedications(String currentMedications) { this.currentMedications = currentMedications; }
+
     public String getEmergencyNotes() { return emergencyNotes; }
     public void setEmergencyNotes(String emergencyNotes) { this.emergencyNotes = emergencyNotes; }
+
+    public String getPhysicianName() { return physicianName; }
+    public void setPhysicianName(String physicianName) { this.physicianName = physicianName; }
+
+    public String getPhysicianPhone() { return physicianPhone; }
+    public void setPhysicianPhone(String physicianPhone) { this.physicianPhone = physicianPhone; }
+
+    public Boolean getOrganDonor() { return organDonor != null && organDonor; }
+    public void setOrganDonor(Boolean organDonor) { this.organDonor = organDonor; }
+    public boolean isOrganDonor() { return organDonor != null && organDonor; }
 
     public Date getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Date updatedAt) { this.updatedAt = updatedAt; }
 }
+

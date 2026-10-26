@@ -716,17 +716,38 @@ class ApiService {
     }
   }
 
-  async addEmergencyContact(data: Omit<EmergencyContact, 'id' | 'user_id' | 'created_at'>): Promise<EmergencyContact> {
+  async addEmergencyContact(data: any): Promise<EmergencyContact> {
+    const payload = {
+      name: data.name,
+      relationship: data.relationship || data.relationship_type || 'Family',
+      relationship_type: data.relationship_type || data.relationship || 'Family',
+      phone: data.phone || data.phone_number || '',
+      phone_number: data.phone_number || data.phone || '',
+      email: data.email || undefined,
+      can_access_emergency_docs: true,
+      canAccessEmergencyDocs: true,
+      can_access_medical: data.can_access_medical ?? true,
+      can_access_identity: data.can_access_identity ?? true,
+      can_access_financial: data.can_access_financial ?? false,
+      is_active: true,
+    };
     return this.request<EmergencyContact>('/emergency/contacts', {
       method: 'POST',
-      body: JSON.stringify(data)
+      body: JSON.stringify(payload)
     });
   }
 
   async updateEmergencyContact(id: string, data: Partial<EmergencyContact>): Promise<EmergencyContact> {
+    const payload = {
+      ...data,
+      relationship: (data as any).relationship || data.relationship_type,
+      relationship_type: data.relationship_type || (data as any).relationship,
+      phone: (data as any).phone || data.phone_number,
+      phone_number: data.phone_number || (data as any).phone,
+    };
     return this.request<EmergencyContact>(`/emergency/contacts/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(data)
+      body: JSON.stringify(payload)
     });
   }
 
@@ -745,10 +766,27 @@ class ApiService {
     }
   }
 
-  async updateEmergencyMedicalInfo(data: EmergencyMedicalInfo): Promise<EmergencyMedicalInfo> {
+  async updateEmergencyMedicalInfo(data: Partial<EmergencyMedicalInfo>): Promise<EmergencyMedicalInfo> {
+    const payload = {
+      ...data,
+      blood_group: data.blood_group || (data as any).bloodGroup,
+      bloodGroup: (data as any).bloodGroup || data.blood_group,
+      chronic_conditions: data.chronic_conditions || (data as any).chronicConditions,
+      chronicConditions: (data as any).chronicConditions || data.chronic_conditions,
+      current_medications: data.current_medications || (data as any).currentMedications,
+      currentMedications: (data as any).currentMedications || data.current_medications,
+      emergency_notes: data.emergency_notes || (data as any).emergencyNotes,
+      emergencyNotes: (data as any).emergencyNotes || data.emergency_notes,
+      physician_name: data.physician_name || (data as any).physicianName,
+      physicianName: (data as any).physicianName || data.physician_name,
+      physician_phone: data.physician_phone || (data as any).physicianPhone,
+      physicianPhone: (data as any).physicianPhone || data.physician_phone,
+      organ_donor: data.organ_donor ?? (data as any).organDonor ?? false,
+      organDonor: (data as any).organDonor ?? data.organ_donor ?? false,
+    };
     return this.request<EmergencyMedicalInfo>('/emergency/medical-info', {
       method: 'PUT',
-      body: JSON.stringify(data)
+      body: JSON.stringify(payload)
     });
   }
 
@@ -761,16 +799,30 @@ class ApiService {
     }
   }
 
-  async accessEmergencyVault(targetUserId: string, data: { reason: string; emergency_contact_id: string }): Promise<{
+  async accessEmergencyVault(targetUserId: string, data: { reason: string; emergency_contact_id?: string }): Promise<{
     owner_name: string;
     owner_phone?: string;
     owner_email: string;
     medical_info?: EmergencyMedicalInfo;
     eligible_documents: DocumentItem[];
+    message?: string;
   }> {
-    return this.request(`/emergency/access/${targetUserId}`, {
+    return this.request(`/emergency/access/${targetUserId || 'me'}`, {
       method: 'POST',
       body: JSON.stringify(data)
+    });
+  }
+
+  async executeBreakGlass(data?: { pin?: string; biometric?: boolean }): Promise<{
+    access_granted?: boolean;
+    medical_info?: EmergencyMedicalInfo;
+    eligible_documents: DocumentItem[];
+    emergency_contacts: EmergencyContact[];
+    message: string;
+  }> {
+    return this.request('/emergency/break-glass', {
+      method: 'POST',
+      body: JSON.stringify(data || {})
     });
   }
 

@@ -157,10 +157,22 @@ public class DocumentDto {
         private String notes;
         private Date expiryDate;
         private Date issueDate;
+        @JsonProperty("is_family_vault")
+        @JsonAlias({"isFamilyVault", "familyVault"})
         private Boolean isFamilyVault;
+
+        @JsonProperty("is_emergency_eligible")
+        @JsonAlias({"isEmergencyEligible", "emergencyEligible"})
         private Boolean isEmergencyEligible;
+
+        @JsonProperty("is_favorite")
+        @JsonAlias({"isFavorite", "favorite"})
         private Boolean isFavorite;
+
+        @JsonProperty("is_offline_available")
+        @JsonAlias({"isOfflineAvailable", "offlineAvailable"})
         private Boolean isOfflineAvailable;
+
         private String collectionName;
 
         public DocumentUpdateRequest() {}
@@ -203,6 +215,8 @@ public class DocumentDto {
 
         public Boolean getEmergencyEligible() { return isEmergencyEligible; }
         public void setEmergencyEligible(Boolean emergencyEligible) { isEmergencyEligible = emergencyEligible; }
+        public Boolean getIsEmergencyEligible() { return isEmergencyEligible; }
+        public void setIsEmergencyEligible(Boolean val) { this.isEmergencyEligible = val; }
 
         public Boolean getFavorite() { return isFavorite; }
         public void setFavorite(Boolean favorite) { isFavorite = favorite; }
