@@ -228,6 +228,8 @@ public class DocumentDto {
 
         public Boolean getFamilyVault() { return isFamilyVault; }
         public void setFamilyVault(Boolean familyVault) { isFamilyVault = familyVault; }
+        public Boolean getIsFamilyVault() { return isFamilyVault; }
+        public void setIsFamilyVault(Boolean val) { this.isFamilyVault = val; }
 
         public Boolean getEmergencyEligible() { return isEmergencyEligible; }
         public void setEmergencyEligible(Boolean emergencyEligible) { isEmergencyEligible = emergencyEligible; }

@@ -279,10 +279,19 @@ class ApiService {
     return this.request<DocumentItem>(`/documents/${id}`);
   }
 
-  async updateDocument(id: string, data: Partial<DocumentItem>): Promise<DocumentItem> {
+  async updateDocument(id: string, data: Partial<DocumentItem> & Record<string, any>): Promise<DocumentItem> {
+    const payload: Record<string, any> = { ...data };
+    if (payload.is_family_vault !== undefined) {
+      payload.isFamilyVault = payload.is_family_vault;
+      payload.familyVault = payload.is_family_vault;
+    }
+    if (payload.is_emergency_eligible !== undefined) {
+      payload.isEmergencyEligible = payload.is_emergency_eligible;
+      payload.emergencyEligible = payload.is_emergency_eligible;
+    }
     return this.request<DocumentItem>(`/documents/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(data)
+      body: JSON.stringify(payload)
     });
   }
 

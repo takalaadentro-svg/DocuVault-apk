@@ -3,19 +3,22 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search, Plus, Filter, FileText, ArrowUpDown, 
   ShieldAlert, Calendar, Eye, Download, QrCode, X,
-  Mic, MicOff, Lock, Users, Dna, Sparkles, CheckCircle2
+  Mic, MicOff, Lock, Users, Dna, Sparkles, CheckCircle2, Check, Share2
 } from 'lucide-react';
 import { DocumentItem } from '../types';
 import { useTheme } from '../context/ThemeContext';
+import { api } from '../services/api';
+import { showLocalNotification } from '../services/pushNotifications';
 
 interface VaultScreenProps {
   documents: DocumentItem[];
   selectedCategory: string;
   onSelectCategory: (cat: string) => void;
-  onOpenUpload: () => void;
+  onOpenUpload: (isFamily?: boolean) => void;
   onOpenDocument: (doc: DocumentItem) => void;
   onOpenQRShare: (doc: DocumentItem) => void;
   onOpenAssistant?: () => void;
+  onRefresh?: () => void;
 }
 
 const CATEGORIES = [
@@ -38,6 +41,7 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
   onOpenDocument,
   onOpenQRShare,
   onOpenAssistant,
+  onRefresh,
 }) => {
   const { colors } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
@@ -45,7 +49,35 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
   const [lockerTab, setLockerTab] = useState<'all' | 'personal' | 'family'>('all');
   const [isListening, setIsListening] = useState(false);
   const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
+  const [togglingDocId, setTogglingDocId] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
+
+  const isFamilyDoc = (d: any) => Boolean(d?.is_family_vault ?? d?.family_vault ?? d?.isFamilyVault);
+
+  const handleToggleFamilyAccess = async (e: React.MouseEvent, doc: DocumentItem) => {
+    e.stopPropagation();
+    if (togglingDocId) return;
+    const isCurrentlyFamily = isFamilyDoc(doc);
+    const nextVal = !isCurrentlyFamily;
+    setTogglingDocId(doc.id);
+
+    try {
+      await api.updateDocument(doc.id, { is_family_vault: nextVal });
+      doc.is_family_vault = nextVal;
+      (doc as any).family_vault = nextVal;
+      showLocalNotification(
+        'DocuVault Vault Access',
+        nextVal
+          ? `"${doc.title}" shared to Family Locker. Group members can now access it.`
+          : `"${doc.title}" moved to Personal Locker. Access removed for group members.`
+      );
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      alert('Failed to change document access: ' + (err?.message || 'Error'));
+    } finally {
+      setTogglingDocId(null);
+    }
+  };
 
   // Initialize Speech Recognition for Voice Search
   useEffect(() => {
@@ -91,8 +123,6 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
       }
     }
   };
-
-  const isFamilyDoc = (d: any) => Boolean(d?.is_family_vault ?? d?.family_vault ?? d?.isFamilyVault);
 
   // Filter & Search
   const filteredDocs = documents.filter(doc => {
@@ -598,6 +628,30 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
                     </span>
                   )}
                   <button
+                    type="button"
+                    onClick={(e) => handleToggleFamilyAccess(e, doc)}
+                    disabled={togglingDocId === doc.id}
+                    title={isFamilyDoc(doc) ? "In Family Locker (Tap to remove access)" : "Personal Locker (Tap to grant family access)"}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '6px 9px',
+                      borderRadius: 8,
+                      backgroundColor: isFamilyDoc(doc) ? 'rgba(59, 130, 246, 0.18)' : 'rgba(255, 255, 255, 0.05)',
+                      border: `1px solid ${isFamilyDoc(doc) ? '#3B82F6' : colors.surfaceBorder}`,
+                      color: isFamilyDoc(doc) ? '#60A5FA' : colors.textMuted,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: togglingDocId === doc.id ? 'wait' : 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {isFamilyDoc(doc) ? <Users size={13} color="#60A5FA" /> : <Lock size={13} color={colors.textMuted} />}
+                    <span style={{ fontSize: 10 }}>{isFamilyDoc(doc) ? 'Family' : 'Personal'}</span>
+                  </button>
+
+                  <button
                     onClick={(e) => {
                       e.stopPropagation();
                       onOpenQRShare(doc);
@@ -623,6 +677,112 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
             );
           })}
         </div>
+      ) : lockerTab === 'family' && personalDocsCount > 0 ? (
+        <div style={{
+          padding: 24,
+          backgroundColor: colors.surfaceCard,
+          borderRadius: 16,
+          border: `1px solid ${colors.surfaceBorder}`,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16,
+        }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{
+              width: 52,
+              height: 52,
+              borderRadius: 26,
+              backgroundColor: 'rgba(59, 130, 246, 0.15)',
+              color: '#60A5FA',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 12px',
+            }}>
+              <Users size={28} />
+            </div>
+            <h3 style={{ fontSize: 17, fontWeight: 800, color: colors.text, margin: 0 }}>
+              No Documents in Family Locker Yet
+            </h3>
+            <p style={{ fontSize: 12, color: colors.textMuted, marginTop: 4, marginBottom: 0 }}>
+              You have {personalDocsCount} documents in your Personal Locker. Grant family access below to make them show in this section:
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 360, overflowY: 'auto' }}>
+            {documents.filter(d => !isFamilyDoc(d)).map(pDoc => (
+              <div
+                key={pDoc.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: 12,
+                  borderRadius: 10,
+                  backgroundColor: colors.surface,
+                  border: `1px solid ${colors.surfaceBorder}`,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1, paddingRight: 8 }}>
+                  <FileText size={18} color={colors.accentLight} style={{ flexShrink: 0 }} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: colors.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {pDoc.title}
+                    </div>
+                    <div style={{ fontSize: 11, color: colors.textMuted }}>
+                      {pDoc.category} • {pDoc.issuer || 'Personal Record'}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={(e) => handleToggleFamilyAccess(e, pDoc)}
+                  disabled={togglingDocId === pDoc.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    backgroundColor: 'rgba(59, 130, 246, 0.18)',
+                    color: '#60A5FA',
+                    border: '1px solid #3B82F6',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: togglingDocId === pDoc.id ? 'wait' : 'pointer',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Users size={14} />
+                  <span>Grant Family Access</span>
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', paddingTop: 8, borderTop: `1px solid ${colors.surfaceBorder}` }}>
+            <button
+              onClick={() => onOpenUpload(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '10px 18px',
+                borderRadius: 10,
+                backgroundColor: colors.accent,
+                color: '#FFF',
+                border: 'none',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              <Plus size={16} />
+              <span>Upload New to Family Locker</span>
+            </button>
+          </div>
+        </div>
       ) : (
         <div style={{
           padding: 40,
@@ -637,7 +797,7 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
             {searchQuery ? 'Try adjusting your search query or voice search terms' : 'Upload your first document to this locker'}
           </p>
           <button
-            onClick={onOpenUpload}
+            onClick={() => onOpenUpload(lockerTab === 'family')}
             style={{
               padding: '10px 20px',
               borderRadius: 10,

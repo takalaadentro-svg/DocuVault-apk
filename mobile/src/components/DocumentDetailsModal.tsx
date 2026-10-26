@@ -1318,6 +1318,79 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
 
           {activeTab === 'permissions' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Family Locker Global Vault Access Toggle Card */}
+              <div style={{
+                padding: 16,
+                borderRadius: 14,
+                backgroundColor: isFamilyLocker ? 'rgba(59, 130, 246, 0.12)' : colors.surfaceCard,
+                border: `1px solid ${isFamilyLocker ? '#3B82F6' : colors.surfaceBorder}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
+                  <div style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 12,
+                    backgroundColor: isFamilyLocker ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: isFamilyLocker ? '#60A5FA' : colors.textMuted,
+                    flexShrink: 0,
+                  }}>
+                    <Users size={22} />
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: colors.text, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>Family Vault Access</span>
+                      <span style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        padding: '2px 8px',
+                        borderRadius: 10,
+                        backgroundColor: isFamilyLocker ? 'rgba(59, 130, 246, 0.25)' : 'rgba(148, 163, 184, 0.15)',
+                        color: isFamilyLocker ? '#60A5FA' : colors.textMuted,
+                      }}>
+                        {isFamilyLocker ? 'Access Granted' : 'Personal Only'}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
+                      {isFamilyLocker
+                        ? 'All accepted members of your family vault can view and access this document.'
+                        : 'Currently private. Grant access to make this document available in the Family Locker.'}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleToggleFamilyLocker}
+                  disabled={isTogglingFamily}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: 10,
+                    backgroundColor: isFamilyLocker ? 'rgba(239, 68, 68, 0.15)' : colors.accent,
+                    color: isFamilyLocker ? colors.danger : '#FFF',
+                    border: isFamilyLocker ? '1px solid rgba(239, 68, 68, 0.3)' : 'none',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: isTogglingFamily ? 'wait' : 'pointer',
+                    flexShrink: 0,
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {isTogglingFamily
+                    ? 'Updating...'
+                    : isFamilyLocker
+                      ? 'Remove Access'
+                      : 'Grant Family Access'}
+                </button>
+              </div>
+
               {/* Share with user form */}
               <form onSubmit={handleGrantPermission} style={{
                 padding: 14,

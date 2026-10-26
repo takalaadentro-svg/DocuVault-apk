@@ -35,6 +35,7 @@ export const AppContent: React.FC = () => {
 
   // Modals state
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [uploadDefaultFamily, setUploadDefaultFamily] = useState(false);
   const [isScanOpen, setIsScanOpen] = useState(false);
   const [selectedDocForDetails, setSelectedDocForDetails] = useState<DocumentItem | null>(null);
   const [selectedDocForShare, setSelectedDocForShare] = useState<DocumentItem | null>(null);
@@ -283,10 +284,14 @@ export const AppContent: React.FC = () => {
               documents={documents}
               selectedCategory={selectedCategory}
               onSelectCategory={cat => setSelectedCategory(cat)}
-              onOpenUpload={() => setIsUploadOpen(true)}
+              onOpenUpload={(isFamily) => {
+                setUploadDefaultFamily(Boolean(isFamily));
+                setIsUploadOpen(true);
+              }}
               onOpenDocument={doc => setSelectedDocForDetails(doc)}
               onOpenQRShare={doc => setSelectedDocForShare(doc)}
               onOpenAssistant={() => setIsAssistantOpen(true)}
+              onRefresh={handleRefreshAll}
             />
           )}
 
@@ -331,7 +336,11 @@ export const AppContent: React.FC = () => {
         {/* Global Modals */}
         <UploadModal
           isOpen={isUploadOpen}
-          onClose={() => setIsUploadOpen(false)}
+          defaultFamilyVault={uploadDefaultFamily}
+          onClose={() => {
+            setIsUploadOpen(false);
+            setUploadDefaultFamily(false);
+          }}
           onSuccess={(docTitle) => {
             handleRefreshAll();
             showToast(`File "${docTitle || 'Document'}" successfully uploaded to your vault!`);

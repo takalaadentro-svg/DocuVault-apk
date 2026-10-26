@@ -13,6 +13,7 @@ import { previewCache } from '../services/previewCache';
 
 interface UploadModalProps {
   isOpen: boolean;
+  defaultFamilyVault?: boolean;
   onClose: () => void;
   onSuccess: (uploadedTitle?: string) => void;
 }
@@ -28,7 +29,7 @@ const CATEGORIES = [
   'Other'
 ];
 
-export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSuccess }) => {
+export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, defaultFamilyVault = false, onClose, onSuccess }) => {
   const { colors } = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -46,8 +47,14 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSuc
   const [notes, setNotes] = useState('');
   const [folder, setFolder] = useState('General');
   const [isEmergencyEligible, setIsEmergencyEligible] = useState(false);
-  const [isFamilyVault, setIsFamilyVault] = useState(false);
+  const [isFamilyVault, setIsFamilyVault] = useState(defaultFamilyVault);
   const [isOfflineAvailable, setIsOfflineAvailable] = useState(true);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      setIsFamilyVault(defaultFamilyVault);
+    }
+  }, [isOpen, defaultFamilyVault]);
 
   // OCR & Quality Assessment states
   const [isOcrScanning, setIsOcrScanning] = useState(false);
@@ -660,17 +667,31 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSuc
             <label style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 10,
+              justifyContent: 'space-between',
+              padding: '10px 14px',
+              borderRadius: 10,
+              backgroundColor: isFamilyVault ? 'rgba(59, 130, 246, 0.14)' : colors.surface,
+              border: `1px solid ${isFamilyVault ? '#3B82F6' : colors.surfaceBorder}`,
               cursor: 'pointer',
-              fontSize: 13,
-              color: colors.text,
+              transition: 'all 0.15s ease',
             }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Users size={18} color={isFamilyVault ? '#60A5FA' : colors.textMuted} />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>
+                    Share with Family Vault Members
+                  </div>
+                  <div style={{ fontSize: 11, color: colors.textMuted }}>
+                    {isFamilyVault ? 'Visible in Family Locker to all members' : 'Private to your Personal Locker only'}
+                  </div>
+                </div>
+              </div>
               <input
                 type="checkbox"
                 checked={isFamilyVault}
                 onChange={e => setIsFamilyVault(e.target.checked)}
+                style={{ width: 18, height: 18, accentColor: '#3B82F6', cursor: 'pointer' }}
               />
-              <span>Share with Family Vault Members</span>
             </label>
 
             <label style={{
