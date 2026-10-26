@@ -6,10 +6,12 @@ import React, { useState, useEffect } from 'react';
 import { 
   X, Download, QrCode, Trash2, Edit3, ShieldAlert, 
   Calendar, Building, FileText, Check, AlertTriangle, Eye, Share2, Users,
-  Dna, ScanLine, Copy, CheckCircle2, ShieldCheck, Loader2, Lock, History, Wifi, Smartphone, RotateCcw
+  Dna, ScanLine, Copy, CheckCircle2, ShieldCheck, Loader2, Lock, History, Wifi, Smartphone, RotateCcw,
+  ZoomIn, ZoomOut, RefreshCw, ExternalLink
 } from 'lucide-react';
 import { DocumentItem, DocumentDNAVerificationResult, DocumentVersion } from '../types';
 import { api } from '../services/api';
+import { previewCache } from '../services/previewCache';
 import { useTheme } from '../context/ThemeContext';
 
 interface DocumentDetailsModalProps {
@@ -49,44 +51,145 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [isOffline, setIsOffline] = useState(doc?.is_offline_available ?? true);
 
-  // Authenticated blob preview & download
-  const [blobPreview, setBlobPreview] = useState<string | null>(null);
+  // Authenticated blob preview & download state
+  const [blobPreview, setBlobPreview] = useState<string | null>(() => {
+    return doc?.id ? previewCache.get(doc.id)?.url || null : null;
+  });
+  const [detectedMime, setDetectedMime] = useState<string | null>(() => {
+    return doc?.id ? previewCache.get(doc.id)?.mimeType || null : null;
+  });
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isZoomed, setIsZoomed] = useState(false);
+  const [pdfNativeOpening, setPdfNativeOpening] = useState(false);
+
+  const fetchPreviewBlob = async (forceRefresh = false) => {
+    if (!doc || !doc.id) return;
+
+    if (!forceRefresh) {
+      const cached = previewCache.get(doc.id);
+      if (cached && cached.url) {
+        setBlobPreview(cached.url);
+        setDetectedMime(cached.mimeType || null);
+        setPreviewError(null);
+        setIsLoadingPreview(false);
+        return;
+      }
+    }
+
+    setIsLoadingPreview(true);
+    setPreviewError(null);
+
+    try {
+      const result = await api.previewDocument(doc.id);
+      const url = previewCache.storeBlob(doc.id, result.blob, result.mimeType);
+      setBlobPreview(url);
+      setDetectedMime(result.mimeType);
+      setPreviewError(null);
+    } catch (err: any) {
+      console.warn('Could not fetch preview blob:', err);
+      // Fallback: try download endpoint
+      try {
+        const dlBlob = await api.downloadDocument(doc.id);
+        const url = previewCache.storeBlob(doc.id, dlBlob, dlBlob.type);
+        setBlobPreview(url);
+        setDetectedMime(dlBlob.type);
+        setPreviewError(null);
+      } catch (fallbackErr: any) {
+        console.warn('Fallback download attempt also failed:', fallbackErr);
+        if (!blobPreview) {
+          setPreviewError(err?.message || 'Document preview is temporarily unavailable. Click retry below.');
+        }
+      }
+    } finally {
+      setIsLoadingPreview(false);
+    }
+  };
 
   useEffect(() => {
-    let isMounted = true;
-    let url: string | null = null;
     if (isOpen && doc && doc.id) {
-      setIsLoadingPreview(true);
-      api.downloadDocument(doc.id)
-        .then(blob => {
-          if (isMounted) {
-            url = URL.createObjectURL(blob);
-            setBlobPreview(url);
-          }
-        })
-        .catch(err => {
-          console.warn('Could not fetch preview blob:', err);
-        })
-        .finally(() => {
-          if (isMounted) setIsLoadingPreview(false);
-        });
-    }
-    return () => {
-      isMounted = false;
-      if (url) {
-        URL.revokeObjectURL(url);
+      const cached = previewCache.get(doc.id);
+      if (cached && cached.url) {
+        setBlobPreview(cached.url);
+        setDetectedMime(cached.mimeType || null);
+        setPreviewError(null);
+        setIsLoadingPreview(false);
+      } else {
+        fetchPreviewBlob(false);
       }
+    } else {
       setBlobPreview(null);
-    };
+      setDetectedMime(null);
+      setPreviewError(null);
+      setIsZoomed(false);
+    }
   }, [isOpen, doc?.id]);
+
+  const handleOpenInNativeViewer = async () => {
+    if (!doc) return;
+    setPdfNativeOpening(true);
+    try {
+      let blob: Blob | undefined = previewCache.get(doc.id)?.blob;
+      if (!blob) {
+        const res = await api.previewDocument(doc.id);
+        blob = res.blob;
+        previewCache.storeBlob(doc.id, res.blob, res.mimeType);
+      }
+      
+      const cleanTitle = (doc.title || 'document').replace(/[^a-zA-Z0-9._-]/g, '_');
+      const filename = doc.original_filename || `${cleanTitle}.pdf`;
+
+      if (Capacitor.isNativePlatform()) {
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onloadend = async () => {
+          try {
+            const base64Data = (reader.result as string).split(',')[1];
+            const savedFile = await Filesystem.writeFile({
+              path: filename,
+              data: base64Data,
+              directory: Directory.Cache,
+              recursive: true,
+            });
+            const canShare = await Share.canShare().then(s => s.value).catch(() => false);
+            if (canShare) {
+              await Share.share({
+                title: doc.title || 'DocuVault Document',
+                text: `Opening ${filename}`,
+                url: savedFile.uri,
+                dialogTitle: 'Open PDF Document',
+              });
+            } else {
+              alert(`Document ready in device cache: ${savedFile.uri}`);
+            }
+          } catch (e: any) {
+            alert('Could not open system viewer: ' + (e?.message || e));
+          } finally {
+            setPdfNativeOpening(false);
+          }
+        };
+      } else {
+        const url = previewCache.get(doc.id)?.url || URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        setPdfNativeOpening(false);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to open document');
+      setPdfNativeOpening(false);
+    }
+  };
 
   const handleDownload = async () => {
     if (!doc || isDownloading) return;
     setIsDownloading(true);
     try {
-      const blob = await api.downloadDocument(doc.id);
+      // Reuse cached blob if already in memory
+      let blob: Blob | undefined = previewCache.get(doc.id)?.blob;
+      if (!blob) {
+        blob = await api.downloadDocument(doc.id);
+        previewCache.storeBlob(doc.id, blob, blob.type);
+      }
       const cleanTitle = (doc.title || 'document').replace(/[^a-zA-Z0-9._-]/g, '_');
       const filename = doc.original_filename || `${cleanTitle}.pdf`;
 
@@ -192,9 +295,18 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
 
   const downloadUrl = api.getDocumentDownloadUrl(doc.id);
   const previewUrl = api.getDocumentPreviewUrl(doc.id);
-  const mime = (doc.mime_type || '').toLowerCase();
-  const isPdf = mime.includes('pdf');
-  const isImage = mime.includes('image');
+  const rawMime = (detectedMime || doc.mime_type || '').toLowerCase();
+  const rawName = (doc.original_filename || doc.title || '').toLowerCase();
+  const isPdf = rawMime.includes('pdf') || rawName.endsWith('.pdf');
+  const isImage = rawMime.includes('image') ||
+    rawName.endsWith('.jpg') ||
+    rawName.endsWith('.jpeg') ||
+    rawName.endsWith('.png') ||
+    rawName.endsWith('.webp') ||
+    rawName.endsWith('.gif') ||
+    rawName.endsWith('.svg') ||
+    rawName.endsWith('.bmp');
+  const isText = rawMime.includes('text') || rawName.endsWith('.txt') || rawName.endsWith('.csv') || rawName.endsWith('.json');
 
   // Expiry badge calculation
   let expiryColor = colors.success;
@@ -447,35 +559,291 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
         {/* Tab Contents */}
         <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
           {activeTab === 'preview' && (
-            <div style={{ height: '100%', minHeight: 320, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ height: '100%', minHeight: 340, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {/* Preview Control Toolbar */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '8px 12px',
+                borderRadius: 12,
+                backgroundColor: colors.surfaceCard,
+                border: `1px solid ${colors.surfaceBorder}`,
+                fontSize: 12,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: colors.textMuted }}>
+                  <span style={{
+                    padding: '2px 8px',
+                    borderRadius: 6,
+                    backgroundColor: isPdf ? 'rgba(239, 68, 68, 0.15)' : isImage ? 'rgba(13, 148, 136, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                    color: isPdf ? '#EF4444' : isImage ? colors.accentLight : '#3B82F6',
+                    fontWeight: 700,
+                    fontSize: 11,
+                    textTransform: 'uppercase',
+                  }}>
+                    {isPdf ? 'PDF' : isImage ? 'IMAGE' : isText ? 'TEXT' : 'DOCUMENT'}
+                  </span>
+                  <span>{((doc.file_size || 0) / 1024).toFixed(1)} KB</span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {isImage && (blobPreview || previewUrl) && (
+                    <button
+                      onClick={() => setIsZoomed(!isZoomed)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '4px 10px',
+                        borderRadius: 8,
+                        backgroundColor: colors.surface,
+                        border: `1px solid ${colors.surfaceBorder}`,
+                        color: colors.text,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {isZoomed ? <ZoomOut size={14} /> : <ZoomIn size={14} />}
+                      <span>{isZoomed ? 'Fit' : 'Zoom'}</span>
+                    </button>
+                  )}
+
+                  {isPdf && (
+                    <button
+                      onClick={handleOpenInNativeViewer}
+                      disabled={pdfNativeOpening}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '4px 10px',
+                        borderRadius: 8,
+                        backgroundColor: colors.accent,
+                        color: '#FFF',
+                        border: 'none',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {pdfNativeOpening ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <ExternalLink size={14} />}
+                      <span>Open in PDF Viewer</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => fetchPreviewBlob(true)}
+                    title="Reload Preview"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: 6,
+                      borderRadius: 8,
+                      backgroundColor: colors.surface,
+                      border: `1px solid ${colors.surfaceBorder}`,
+                      color: colors.textMuted,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <RefreshCw size={14} style={{ animation: isLoadingPreview ? 'spin 1s linear infinite' : 'none' }} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Main Preview Container */}
               <div style={{
                 flex: 1,
+                minHeight: 380,
                 borderRadius: 14,
-                overflow: 'hidden',
+                overflow: 'auto',
                 border: `1px solid ${colors.surfaceBorder}`,
                 backgroundColor: colors.surfaceCard,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                position: 'relative',
               }}>
-                {isLoadingPreview ? (
+                {isLoadingPreview && !blobPreview ? (
                   <div style={{ textAlign: 'center', padding: 30 }}>
                     <Loader2 size={36} color={colors.accentLight} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
                     <div style={{ fontSize: 14, fontWeight: 600, color: colors.text }}>Loading secure preview from vault...</div>
-                    <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 4 }}>Decrypting document data</div>
+                    <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 4 }}>Decrypting & rendering document data</div>
+                  </div>
+                ) : previewError && !blobPreview ? (
+                  <div style={{ textAlign: 'center', padding: 30, maxWidth: 360 }}>
+                    <AlertTriangle size={42} color={colors.warning} style={{ margin: '0 auto 12px' }} />
+                    <div style={{ fontSize: 15, fontWeight: 700, color: colors.text }}>Preview Temporarily Unavailable</div>
+                    <p style={{ fontSize: 12, color: colors.textMuted, marginTop: 6, lineHeight: 1.5 }}>
+                      The file is safely stored in your vault. You can retry loading the preview or download the file directly to your device.
+                    </p>
+                    <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 16 }}>
+                      <button
+                        onClick={() => fetchPreviewBlob(true)}
+                        style={{
+                          padding: '8px 16px',
+                          borderRadius: 8,
+                          backgroundColor: colors.accent,
+                          color: '#FFF',
+                          border: 'none',
+                          fontWeight: 600,
+                          fontSize: 13,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                        }}
+                      >
+                        <RefreshCw size={14} />
+                        Retry Preview
+                      </button>
+                      <button
+                        onClick={handleDownload}
+                        style={{
+                          padding: '8px 16px',
+                          borderRadius: 8,
+                          backgroundColor: colors.surface,
+                          border: `1px solid ${colors.surfaceBorder}`,
+                          color: colors.text,
+                          fontWeight: 600,
+                          fontSize: 13,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                        }}
+                      >
+                        <Download size={14} />
+                        Download
+                      </button>
+                    </div>
                   </div>
                 ) : isImage && (blobPreview || previewUrl) ? (
-                  <img
-                    src={blobPreview || previewUrl}
-                    alt={doc.title}
-                    style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-                  />
-                ) : isPdf && (blobPreview || previewUrl) ? (
-                  <iframe
-                    src={`${blobPreview || previewUrl}#toolbar=0`}
-                    title={doc.title}
-                    style={{ width: '100%', height: '100%', border: 'none', minHeight: 380 }}
-                  />
+                  <div style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'auto',
+                    padding: 8,
+                  }}>
+                    <img
+                      src={blobPreview || previewUrl}
+                      alt={doc.title}
+                      onError={() => {
+                        console.warn('Image load error on preview URL');
+                        if (!blobPreview) fetchPreviewBlob(true);
+                      }}
+                      style={{
+                        maxWidth: isZoomed ? 'none' : '100%',
+                        maxHeight: isZoomed ? 'none' : '100%',
+                        width: isZoomed ? '180%' : 'auto',
+                        objectFit: 'contain',
+                        borderRadius: 8,
+                        transition: 'width 0.2s ease',
+                      }}
+                    />
+                  </div>
+                ) : isPdf ? (
+                  Capacitor.isNativePlatform() ? (
+                    /* Native Android PDF View Box */
+                    <div style={{ textAlign: 'center', padding: 24, width: '100%', maxWidth: 420 }}>
+                      <div style={{
+                        width: 64,
+                        height: 64,
+                        borderRadius: 16,
+                        backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        margin: '0 auto 16px',
+                        color: '#EF4444',
+                      }}>
+                        <FileText size={32} />
+                      </div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: colors.text }}>{doc.title || 'PDF Document'}</div>
+                      <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 4 }}>
+                        {doc.original_filename || 'document.pdf'} • {((doc.file_size || 0) / 1024).toFixed(1)} KB
+                      </div>
+
+                      <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <button
+                          onClick={handleOpenInNativeViewer}
+                          disabled={pdfNativeOpening}
+                          style={{
+                            padding: '12px 20px',
+                            borderRadius: 12,
+                            backgroundColor: colors.accent,
+                            color: '#FFF',
+                            border: 'none',
+                            fontWeight: 700,
+                            fontSize: 14,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 8,
+                            boxShadow: '0 4px 12px rgba(13, 148, 136, 0.3)',
+                          }}
+                        >
+                          {pdfNativeOpening ? (
+                            <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
+                          ) : (
+                            <ExternalLink size={18} />
+                          )}
+                          <span>Open in System PDF Viewer</span>
+                        </button>
+
+                        <button
+                          onClick={handleDownload}
+                          disabled={isDownloading}
+                          style={{
+                            padding: '10px 16px',
+                            borderRadius: 12,
+                            backgroundColor: colors.surface,
+                            border: `1px solid ${colors.surfaceBorder}`,
+                            color: colors.text,
+                            fontWeight: 600,
+                            fontSize: 13,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 6,
+                          }}
+                        >
+                          <Download size={16} />
+                          <span>Download PDF to Device</span>
+                        </button>
+                      </div>
+
+                      {doc.ocr_text && (
+                        <div style={{
+                          marginTop: 20,
+                          textAlign: 'left',
+                          backgroundColor: colors.surface,
+                          borderRadius: 10,
+                          padding: 12,
+                          border: `1px solid ${colors.surfaceBorder}`,
+                        }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: colors.textMuted, textTransform: 'uppercase', marginBottom: 6 }}>
+                            OCR Extracted Text Snippet
+                          </div>
+                          <div style={{ fontSize: 12, color: colors.text, maxHeight: 100, overflowY: 'auto', whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
+                            {doc.ocr_text.slice(0, 300)}...
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* Web Browser Embedded PDF View */
+                    <iframe
+                      src={`${blobPreview || previewUrl}#toolbar=0`}
+                      title={doc.title}
+                      style={{ width: '100%', height: '100%', border: 'none', minHeight: 460 }}
+                    />
+                  )
                 ) : (
                   <div style={{ textAlign: 'center', padding: 30 }}>
                     <FileText size={48} color={colors.accentLight} style={{ margin: '0 auto 12px' }} />
@@ -483,6 +851,27 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
                     <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 4 }}>
                       Format: {doc.mime_type || 'Document'} • {((doc.file_size || 0) / 1024).toFixed(1)} KB
                     </div>
+                    <button
+                      onClick={handleDownload}
+                      disabled={isDownloading}
+                      style={{
+                        marginTop: 16,
+                        padding: '10px 18px',
+                        borderRadius: 10,
+                        backgroundColor: colors.accent,
+                        color: '#FFF',
+                        border: 'none',
+                        fontWeight: 600,
+                        fontSize: 13,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      <Download size={16} />
+                      Download to View
+                    </button>
                   </div>
                 )}
               </div>

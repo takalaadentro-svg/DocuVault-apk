@@ -192,4 +192,10 @@ public class DocumentRecord {
 
     public Date getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Date updatedAt) { this.updatedAt = updatedAt; }
+    /** Resilient database backup of file payload to prevent loss on ephemeral container restarts */
+    private String base64Data;
+
+    public String getBase64Data() { return base64Data; }
+    public void setBase64Data(String base64Data) { this.base64Data = base64Data; }
+
 }

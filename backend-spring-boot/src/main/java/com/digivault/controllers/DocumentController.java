@@ -6,6 +6,7 @@ import com.digivault.models.User;
 import com.digivault.payload.DocumentDto.*;
 import com.digivault.services.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
@@ -15,6 +16,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Base64;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -286,15 +288,58 @@ public class DocumentController {
         }
     }
 
+    private MediaType resolveMediaType(DocumentRecord doc) {
+        if (doc.getMimeType() != null && !doc.getMimeType().isBlank()
+                && !doc.getMimeType().equalsIgnoreCase("application/octet-stream")) {
+            try {
+                return MediaType.parseMediaType(doc.getMimeType());
+            } catch (Exception ignored) {}
+        }
+        String name = (doc.getOriginalFilename() != null ? doc.getOriginalFilename() : "").toLowerCase();
+        if (name.endsWith(".pdf")) return MediaType.APPLICATION_PDF;
+        if (name.endsWith(".png")) return MediaType.IMAGE_PNG;
+        if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return MediaType.IMAGE_JPEG;
+        if (name.endsWith(".webp")) return MediaType.parseMediaType("image/webp");
+        if (name.endsWith(".gif")) return MediaType.IMAGE_GIF;
+        if (name.endsWith(".svg")) return MediaType.parseMediaType("image/svg+xml");
+        if (name.endsWith(".txt")) return MediaType.TEXT_PLAIN;
+        return MediaType.APPLICATION_OCTET_STREAM;
+    }
+
+    private Resource resolveDocumentResource(DocumentRecord doc) {
+        try {
+            Resource resource = storageService.loadFileAsResource(doc.getStoredFilename());
+            if (resource != null && resource.exists() && resource.isReadable()) {
+                return resource;
+            }
+        } catch (Exception ex) {
+            // Local file wiped or inaccessible on ephemeral host - attempt database restore
+        }
+
+        if (doc.getBase64Data() != null && !doc.getBase64Data().isBlank()) {
+            try {
+                byte[] bytes = Base64.getDecoder().decode(doc.getBase64Data());
+                storageService.restoreFile(doc.getStoredFilename(), bytes);
+                return new ByteArrayResource(bytes);
+            } catch (Exception e) {
+                // fall through
+            }
+        }
+
+        // Final attempt via storageService which throws clear error if still absent
+        return storageService.loadFileAsResource(doc.getStoredFilename());
+    }
+
     @GetMapping("/{id}/download")
     public ResponseEntity<Resource> downloadDocument(
             @AuthenticationPrincipal User user,
             @PathVariable("id") String id) {
         DocumentRecord doc = documentService.findAndAuthorize(user, id);
-        Resource resource = storageService.loadFileAsResource(doc.getStoredFilename());
+        Resource resource = resolveDocumentResource(doc);
+        MediaType mediaType = resolveMediaType(doc);
 
         return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(doc.getMimeType() != null ? doc.getMimeType() : "application/octet-stream"))
+                .contentType(mediaType)
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + doc.getOriginalFilename() + "\"")
                 .body(resource);
     }
@@ -304,10 +349,11 @@ public class DocumentController {
             @AuthenticationPrincipal User user,
             @PathVariable("id") String id) {
         DocumentRecord doc = documentService.findAndAuthorize(user, id);
-        Resource resource = storageService.loadFileAsResource(doc.getStoredFilename());
+        Resource resource = resolveDocumentResource(doc);
+        MediaType mediaType = resolveMediaType(doc);
 
         return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(doc.getMimeType() != null ? doc.getMimeType() : "application/octet-stream"))
+                .contentType(mediaType)
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + doc.getOriginalFilename() + "\"")
                 .body(resource);
     }

@@ -302,14 +302,48 @@ class ApiService {
     return `${BASE_URL}/documents/${id}/preview${token ? `?token=${encodeURIComponent(token)}` : ''}`;
   }
 
+  async previewDocument(id: string): Promise<{ blob: Blob; mimeType: string }> {
+    const token = this.getToken();
+    const headers = new Headers();
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+
+    // Try dedicated /preview endpoint first
+    try {
+      const response = await fetch(`${BASE_URL}/documents/${id}/preview`, { headers });
+      if (response.ok) {
+        const mimeType = response.headers.get('content-type') || '';
+        const blob = await response.blob();
+        return { blob, mimeType };
+      }
+    } catch (e) {
+      console.warn('Initial preview endpoint call failed, attempting download fallback:', e);
+    }
+
+    // Fallback to /download endpoint
+    const dlResponse = await fetch(`${BASE_URL}/documents/${id}/download`, { headers });
+    if (!dlResponse.ok) {
+      throw new Error(`Failed to load document preview (HTTP ${dlResponse.status})`);
+    }
+    const mimeType = dlResponse.headers.get('content-type') || '';
+    const blob = await dlResponse.blob();
+    return { blob, mimeType };
+  }
+
   async downloadDocument(id: string): Promise<Blob> {
     const token = this.getToken();
     const headers = new Headers();
     if (token) headers.set('Authorization', `Bearer ${token}`);
     
-    const response = await fetch(`${BASE_URL}/documents/${id}/download`, { headers });
-    if (!response.ok) throw new Error('Download failed');
-    return response.blob();
+    try {
+      const response = await fetch(`${BASE_URL}/documents/${id}/download`, { headers });
+      if (response.ok) return await response.blob();
+    } catch (e) {
+      console.warn('Primary download endpoint failed, attempting preview route:', e);
+    }
+
+    const fallback = await fetch(`${BASE_URL}/documents/${id}/preview`, { headers });
+    if (!fallback.ok) throw new Error('Download failed');
+    return fallback.blob();
   }
 
   async chatWithDocuments(question: string, localDocs?: DocumentItem[]): Promise<DocumentChatResponse> {

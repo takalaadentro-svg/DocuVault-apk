@@ -9,6 +9,7 @@ import { api } from '../services/api';
 import { useTheme } from '../context/ThemeContext';
 import { OCRExtractResult, DuplicateCheckResult } from '../types';
 import { showLocalNotification } from '../services/pushNotifications';
+import { previewCache } from '../services/previewCache';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -150,6 +151,15 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSuc
       if (ocrResult?.extracted_text) formData.append('ocr_text', ocrResult.extracted_text);
 
       const savedDoc = await api.uploadDocument(formData);
+
+      // Cache file for instant 0ms preview rendering
+      if (savedDoc?.id && file) {
+        try {
+          previewCache.storeBlob(savedDoc.id, file, file.type);
+        } catch (cacheErr) {
+          console.warn('Could not cache uploaded file for preview:', cacheErr);
+        }
+      }
 
       // Record feedback if fields were corrected
       if (ocrResult && savedDoc?.id) {

@@ -252,4 +252,15 @@ public class StorageService {
     public String getStorageType() {
         return r2Configured ? "CLOUDFLARE_R2" : storageType;
     }
+    public void restoreFile(String storedFilename, byte[] bytes) {
+        try {
+            Files.createDirectories(this.storageLocation);
+            Path targetLocation = this.storageLocation.resolve(storedFilename);
+            Files.write(targetLocation, bytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            logger.info("Restored file from database backup onto local disk: {}", storedFilename);
+        } catch (IOException e) {
+            logger.warn("Could not write restored file to disk: {}", e.getMessage());
+        }
+    }
+
 }

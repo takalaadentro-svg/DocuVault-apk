@@ -9,6 +9,7 @@ import com.digivault.repositories.ShareTokenRepository;
 import com.digivault.services.ShareService;
 import com.digivault.services.StorageService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -16,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -96,7 +98,7 @@ public class ShareController {
             resp.put("mime_type", doc.getMimeType() != null ? doc.getMimeType() : "application/pdf");
             resp.put("file_size", doc.getFileSize());
             resp.put("download_url", "/api/v1/share/public/" + token + "/download" + (pin != null ? "?pin=" + pin : ""));
-            resp.put("preview_url", "/api/v1/share/public/" + token + "/download" + (pin != null ? "?pin=" + pin : ""));
+            resp.put("preview_url", "/api/v1/share/public/" + token + "/preview" + (pin != null ? "?pin=" + pin : ""));
             resp.put("expires_at", doc.getExpiryDate());
             resp.put("access_count", 1);
             resp.put("max_access_count", 5);
@@ -107,16 +109,72 @@ public class ShareController {
         }
     }
 
+    private MediaType resolveMediaType(DocumentRecord doc) {
+        if (doc.getMimeType() != null && !doc.getMimeType().isBlank()
+                && !doc.getMimeType().equalsIgnoreCase("application/octet-stream")) {
+            try {
+                return MediaType.parseMediaType(doc.getMimeType());
+            } catch (Exception ignored) {}
+        }
+        String name = (doc.getOriginalFilename() != null ? doc.getOriginalFilename() : "").toLowerCase();
+        if (name.endsWith(".pdf")) return MediaType.APPLICATION_PDF;
+        if (name.endsWith(".png")) return MediaType.IMAGE_PNG;
+        if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return MediaType.IMAGE_JPEG;
+        if (name.endsWith(".webp")) return MediaType.parseMediaType("image/webp");
+        if (name.endsWith(".gif")) return MediaType.IMAGE_GIF;
+        if (name.endsWith(".svg")) return MediaType.parseMediaType("image/svg+xml");
+        if (name.endsWith(".txt")) return MediaType.TEXT_PLAIN;
+        return MediaType.APPLICATION_OCTET_STREAM;
+    }
+
+    private Resource resolveDocumentResource(DocumentRecord doc) {
+        try {
+            Resource resource = storageService.loadFileAsResource(doc.getStoredFilename());
+            if (resource != null && resource.exists() && resource.isReadable()) {
+                return resource;
+            }
+        } catch (Exception ex) {
+            // Local file wiped on ephemeral host - attempt database restore
+        }
+
+        if (doc.getBase64Data() != null && !doc.getBase64Data().isBlank()) {
+            try {
+                byte[] bytes = Base64.getDecoder().decode(doc.getBase64Data());
+                storageService.restoreFile(doc.getStoredFilename(), bytes);
+                return new ByteArrayResource(bytes);
+            } catch (Exception e) {
+                // fall through
+            }
+        }
+
+        return storageService.loadFileAsResource(doc.getStoredFilename());
+    }
+
     @GetMapping("/public/{token}/download")
     public ResponseEntity<Resource> downloadPublicDocument(
             @PathVariable("token") String token,
             @RequestParam(value = "pin", required = false) String pin) {
         DocumentRecord doc = shareService.accessPublicDocumentRecord(token, pin);
-        Resource resource = storageService.loadFileAsResource(doc.getStoredFilename());
+        Resource resource = resolveDocumentResource(doc);
+        MediaType mediaType = resolveMediaType(doc);
 
         return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(doc.getMimeType() != null ? doc.getMimeType() : "application/octet-stream"))
+                .contentType(mediaType)
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + doc.getOriginalFilename() + "\"")
+                .body(resource);
+    }
+
+    @GetMapping("/public/{token}/preview")
+    public ResponseEntity<Resource> previewPublicDocument(
+            @PathVariable("token") String token,
+            @RequestParam(value = "pin", required = false) String pin) {
+        DocumentRecord doc = shareService.accessPublicDocumentRecord(token, pin);
+        Resource resource = resolveDocumentResource(doc);
+        MediaType mediaType = resolveMediaType(doc);
+
+        return ResponseEntity.ok()
+                .contentType(mediaType)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + doc.getOriginalFilename() + "\"")
                 .body(resource);
     }
 }
