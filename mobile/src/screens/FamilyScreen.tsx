@@ -66,7 +66,17 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
   const [contactEmail, setContactEmail] = useState('');
   const [isSavingContact, setIsSavingContact] = useState(false);
 
-  const primaryFamily = families[0];
+  const [selectedFamilyId, setSelectedFamilyId] = useState<string>('');
+
+  const primaryFamily = React.useMemo(() => {
+    if (!families || families.length === 0) return null;
+    if (selectedFamilyId) {
+      const match = families.find(f => f.id === selectedFamilyId);
+      if (match) return match;
+    }
+    const multiMember = families.find(f => (f.members?.length || 0) > 1);
+    return multiMember || families[0];
+  }, [families, selectedFamilyId]);
 
     // Auto-accept invitation from email deep link if token is present
   React.useEffect(() => {
@@ -355,6 +365,55 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
 
           {primaryFamily ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {families.length > 1 && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  overflowX: 'auto',
+                  paddingBottom: 4,
+                  scrollbarWidth: 'none',
+                }}>
+                  {families.map(f => {
+                    const isSelected = f.id === primaryFamily.id;
+                    return (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setSelectedFamilyId(f.id)}
+                        style={{
+                          padding: '6px 14px',
+                          borderRadius: 20,
+                          backgroundColor: isSelected ? colors.accent : colors.surfaceCard,
+                          color: isSelected ? '#FFF' : colors.textMuted,
+                          border: `1px solid ${isSelected ? colors.accent : colors.surfaceBorder}`,
+                          fontSize: 12,
+                          fontWeight: isSelected ? 700 : 500,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        <Users size={12} />
+                        <span>{f.name}</span>
+                        <span style={{
+                          fontSize: 10,
+                          backgroundColor: isSelected ? 'rgba(255,255,255,0.2)' : 'rgba(13,148,136,0.15)',
+                          color: isSelected ? '#FFF' : colors.accentLight,
+                          padding: '1px 6px',
+                          borderRadius: 10,
+                          fontWeight: 700,
+                        }}>
+                          {f.members?.length || 0}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               <div style={{
                 padding: 16,
                 borderRadius: 16,

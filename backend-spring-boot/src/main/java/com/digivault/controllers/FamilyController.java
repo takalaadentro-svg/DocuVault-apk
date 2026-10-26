@@ -14,13 +14,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/v1/family")
+@RequestMapping({"/api/v1/family", "/api/v1/family/"})
 @CrossOrigin(origins = "*", maxAge = 3600)
 public class FamilyController {
 
@@ -36,12 +34,12 @@ public class FamilyController {
     @Autowired
     private DocumentService documentService;
 
-    @GetMapping
+    @GetMapping({"", "/"})
     public ResponseEntity<?> getFamilyGroup(@AuthenticationPrincipal User user) {
         if (user == null) {
             return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
         }
-        return ResponseEntity.ok(Collections.singletonList(familyService.getOrCreateFamilyGroup(user)));
+        return ResponseEntity.ok(familyService.getUserFamilyGroups(user));
     }
 
     @PostMapping
@@ -131,7 +129,12 @@ public class FamilyController {
         if (user == null) {
             return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
         }
-        List<DocumentRecord> docs = documentRepository.findByUserIdAndIsFamilyVault(user.getId(), true);
+        Set<String> fellowMemberIds = familyService.getFamilyMemberUserIds(user.getId());
+        fellowMemberIds.remove(user.getId());
+        if (fellowMemberIds.isEmpty()) {
+            return ResponseEntity.ok(Collections.emptyList());
+        }
+        List<DocumentRecord> docs = documentRepository.findByUserIdInAndIsFamilyVault(new ArrayList<>(fellowMemberIds), true);
         List<DocumentResponse> responses = docs.stream().map(documentService::toResponse).collect(Collectors.toList());
         return ResponseEntity.ok(responses);
     }
@@ -144,5 +147,130 @@ public class FamilyController {
         List<DocumentRecord> docs = documentRepository.findByUserIdAndIsFamilyVault(user.getId(), true);
         List<DocumentResponse> responses = docs.stream().map(documentService::toResponse).collect(Collectors.toList());
         return ResponseEntity.ok(responses);
+    }
+
+    @GetMapping(value = "/invite-redirect", produces = "text/html")
+    public ResponseEntity<String> inviteRedirect(@RequestParam(value = "token", required = false) String token) {
+        String safeToken = (token != null) ? token.replaceAll("[^a-zA-Z0-9\\-]", "") : "";
+        String html = "<!DOCTYPE html>\n"
+                + "<html lang=\"en\">\n"
+                + "<head>\n"
+                + "  <meta charset=\"utf-8\">\n"
+                + "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">\n"
+                + "  <title>Accept Family Invitation - DocuVault</title>\n"
+                + "  <meta http-equiv=\"refresh\" content=\"0;url=docuvault://family?token=" + safeToken + "\">\n"
+                + "  <style>\n"
+                + "    * { box-sizing: border-box; margin: 0; padding: 0; }\n"
+                + "    body {\n"
+                + "      background-color: #0F172A;\n"
+                + "      color: #F8FAFC;\n"
+                + "      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;\n"
+                + "      display: flex;\n"
+                + "      align-items: center;\n"
+                + "      justify-content: center;\n"
+                + "      min-height: 100vh;\n"
+                + "      padding: 24px;\n"
+                + "    }\n"
+                + "    .card {\n"
+                + "      background: #1E293B;\n"
+                + "      border: 1px solid #334155;\n"
+                + "      border-radius: 24px;\n"
+                + "      padding: 32px 24px;\n"
+                + "      max-width: 440px;\n"
+                + "      width: 100%;\n"
+                + "      text-align: center;\n"
+                + "      box-shadow: 0 20px 40px rgba(0,0,0,0.5);\n"
+                + "    }\n"
+                + "    .shield-badge {\n"
+                + "      width: 64px;\n"
+                + "      height: 64px;\n"
+                + "      border-radius: 20px;\n"
+                + "      background: linear-gradient(135deg, #0D9488, #2563EB);\n"
+                + "      display: inline-flex;\n"
+                + "      align-items: center;\n"
+                + "      justify-content: center;\n"
+                + "      font-size: 32px;\n"
+                + "      margin-bottom: 20px;\n"
+                + "      box-shadow: 0 8px 24px rgba(13, 148, 136, 0.4);\n"
+                + "    }\n"
+                + "    h1 { font-size: 24px; font-weight: 800; margin-bottom: 8px; }\n"
+                + "    p { font-size: 14px; color: #94A3B8; line-height: 1.5; margin-bottom: 24px; }\n"
+                + "    .btn-primary {\n"
+                + "      display: block;\n"
+                + "      background: linear-gradient(135deg, #0D9488, #2563EB);\n"
+                + "      color: #FFFFFF;\n"
+                + "      text-decoration: none;\n"
+                + "      font-weight: 700;\n"
+                + "      font-size: 15px;\n"
+                + "      padding: 14px 20px;\n"
+                + "      border-radius: 14px;\n"
+                + "      margin-bottom: 12px;\n"
+                + "      border: none;\n"
+                + "      box-shadow: 0 4px 14px rgba(13, 148, 136, 0.4);\n"
+                + "      cursor: pointer;\n"
+                + "    }\n"
+                + "    .btn-secondary {\n"
+                + "      display: block;\n"
+                + "      width: 100%;\n"
+                + "      background: #0F172A;\n"
+                + "      color: #2DD4BF;\n"
+                + "      border: 1px solid #0D9488;\n"
+                + "      text-decoration: none;\n"
+                + "      font-weight: 700;\n"
+                + "      font-size: 13px;\n"
+                + "      padding: 12px 20px;\n"
+                + "      border-radius: 14px;\n"
+                + "      margin-bottom: 16px;\n"
+                + "      cursor: pointer;\n"
+                + "    }\n"
+                + "    .token-box {\n"
+                + "      background: #0F172A;\n"
+                + "      border: 1px dashed #475569;\n"
+                + "      border-radius: 12px;\n"
+                + "      padding: 12px;\n"
+                + "      margin-bottom: 20px;\n"
+                + "      word-break: break-all;\n"
+                + "      font-family: monospace;\n"
+                + "      font-size: 13px;\n"
+                + "      color: #2DD4BF;\n"
+                + "    }\n"
+                + "  </style>\n"
+                + "</head>\n"
+                + "<body>\n"
+                + "  <div class=\"card\">\n"
+                + "    <div class=\"shield-badge\">&#128737;</div>\n"
+                + "    <h1>Docu<span style=\"color:#14B8A6\">Vault</span></h1>\n"
+                + "    <p>Opening invitation in DocuVault app on your phone...</p>\n"
+                + "    <div class=\"token-box\" id=\"tokenVal\">" + safeToken + "</div>\n"
+                + "    <a id=\"launchBtn\" href=\"intent://family?token=" + safeToken + "#Intent;scheme=docuvault;package=com.docuvault.app;end\" class=\"btn-primary\">\n"
+                + "      &#128241; Open DocuVault App\n"
+                + "    </a>\n"
+                + "    <button type=\"button\" onclick=\"copyToken()\" id=\"copyBtn\" class=\"btn-secondary\">\n"
+                + "      &#128203; Copy Invitation Token\n"
+                + "    </button>\n"
+                + "    <p style=\"font-size: 12px; color: #64748B; margin-bottom: 0;\">\n"
+                + "      If the app does not open automatically, open <b>DocuVault</b> on your phone, go to <b>Family Vault</b> and tap <b>Enter Token</b>.\n"
+                + "    </p>\n"
+                + "  </div>\n"
+                + "  <script>\n"
+                + "    var tok = \"" + safeToken + "\";\n"
+                + "    var isAndroid = /Android/i.test(navigator.userAgent);\n"
+                + "    var androidIntent = \"intent://family?token=\" + encodeURIComponent(tok) + \"#Intent;scheme=docuvault;package=com.docuvault.app;end\";\n"
+                + "    var schemeUrl = \"docuvault://family?token=\" + encodeURIComponent(tok);\n"
+                + "    setTimeout(function() {\n"
+                + "      if (isAndroid) { window.location.href = androidIntent; }\n"
+                + "      else { window.location.href = schemeUrl; }\n"
+                + "    }, 80);\n"
+                + "    function copyToken() {\n"
+                + "      navigator.clipboard.writeText(tok).then(function() {\n"
+                + "        document.getElementById('copyBtn').innerText = '✓ Token Copied to Clipboard!';\n"
+                + "      }).catch(function() {\n"
+                + "        alert('Token: ' + tok);\n"
+                + "      });\n"
+                + "    }\n"
+                + "  </script>\n"
+                + "</body>\n"
+                + "</html>";
+        return ResponseEntity.ok(html);
     }
 }

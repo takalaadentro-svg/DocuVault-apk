@@ -31,32 +31,104 @@ public class FamilyService {
 
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(FamilyService.class);
 
-    public FamilyGroupDetails getOrCreateFamilyGroup(User user) {
+    public List<FamilyGroupDetails> getUserFamilyGroups(User user) {
         List<FamilyMember> memberships = familyMemberRepository.findByUserId(user.getId());
-        FamilyGroup group;
+        List<FamilyGroupDetails> results = new ArrayList<>();
+        Set<String> seenGroupIds = new HashSet<>();
 
-        if (memberships.isEmpty()) {
-            // Check if user is owner of any group
-            List<FamilyGroup> ownedGroups = familyGroupRepository.findByOwnerId(user.getId());
-            if (ownedGroups.isEmpty()) {
-                group = new FamilyGroup(user.getFullName() + "'s Family Locker", user.getId());
-                group = familyGroupRepository.save(group);
-
-                FamilyMember member = new FamilyMember(group.getId(), user.getId(), "ADMIN");
-                familyMemberRepository.save(member);
-            } else {
-                group = ownedGroups.get(0);
+        for (FamilyMember m : memberships) {
+            if (m.getFamilyGroupId() != null && !seenGroupIds.contains(m.getFamilyGroupId())) {
+                familyGroupRepository.findById(m.getFamilyGroupId()).ifPresent(g -> {
+                    results.add(getGroupDetails(g));
+                    seenGroupIds.add(g.getId());
+                });
             }
-        } else {
-            String groupId = memberships.get(0).getFamilyGroupId();
-            group = familyGroupRepository.findById(groupId)
-                    .orElseGet(() -> {
-                        FamilyGroup newGroup = new FamilyGroup(user.getFullName() + "'s Family Locker", user.getId());
-                        return familyGroupRepository.save(newGroup);
-                    });
         }
 
-        return getGroupDetails(group);
+        List<FamilyGroup> ownedGroups = familyGroupRepository.findByOwnerId(user.getId());
+        for (FamilyGroup g : ownedGroups) {
+            if (g.getId() != null && !seenGroupIds.contains(g.getId())) {
+                results.add(getGroupDetails(g));
+                seenGroupIds.add(g.getId());
+            }
+        }
+
+        if (results.isEmpty()) {
+            FamilyGroup group = new FamilyGroup(user.getFullName() + "'s Family Locker", user.getId());
+            group = familyGroupRepository.save(group);
+
+            FamilyMember member = new FamilyMember(group.getId(), user.getId(), "ADMIN");
+            familyMemberRepository.save(member);
+            results.add(getGroupDetails(group));
+        }
+
+        // Prioritize active multi-member shared groups first, then newest
+        results.sort((a, b) -> {
+            int aCount = a.getMembers() != null ? a.getMembers().size() : 0;
+            int bCount = b.getMembers() != null ? b.getMembers().size() : 0;
+            if (aCount != bCount) {
+                return Integer.compare(bCount, aCount); // higher member count first
+            }
+            if (a.getCreatedAt() != null && b.getCreatedAt() != null) {
+                return b.getCreatedAt().compareTo(a.getCreatedAt());
+            }
+            return 0;
+        });
+
+        return results;
+    }
+
+    public FamilyGroupDetails getOrCreateFamilyGroup(User user) {
+        List<FamilyGroupDetails> groups = getUserFamilyGroups(user);
+        return groups.get(0);
+    }
+
+    public Set<String> getFamilyMemberUserIds(String userId) {
+        Set<String> memberIds = new HashSet<>();
+        if (userId == null || userId.trim().isEmpty()) {
+            return memberIds;
+        }
+        memberIds.add(userId);
+
+        Set<String> groupIds = new HashSet<>();
+        List<FamilyMember> memberships = familyMemberRepository.findByUserId(userId);
+        for (FamilyMember m : memberships) {
+            if (m.getFamilyGroupId() != null) {
+                groupIds.add(m.getFamilyGroupId());
+            }
+        }
+
+        List<FamilyGroup> owned = familyGroupRepository.findByOwnerId(userId);
+        for (FamilyGroup g : owned) {
+            if (g.getId() != null) {
+                groupIds.add(g.getId());
+            }
+        }
+
+        for (String gid : groupIds) {
+            List<FamilyMember> members = familyMemberRepository.findByFamilyGroupId(gid);
+            for (FamilyMember m : members) {
+                if (m.getUserId() != null) {
+                    memberIds.add(m.getUserId());
+                }
+            }
+            familyGroupRepository.findById(gid).ifPresent(g -> {
+                if (g.getOwnerId() != null) {
+                    memberIds.add(g.getOwnerId());
+                }
+            });
+        }
+        return memberIds;
+    }
+
+    public boolean areUsersInSameFamilyGroup(String userId1, String userId2) {
+        if (userId1 == null || userId2 == null) {
+            return false;
+        }
+        if (userId1.equals(userId2)) {
+            return true;
+        }
+        return getFamilyMemberUserIds(userId1).contains(userId2);
     }
 
     public FamilyInvitation inviteMember(User user, String inviteeEmail) {

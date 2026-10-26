@@ -25,11 +25,21 @@ public class FamilyDto {
 
     public static class MemberInfo {
         private String id;
+
+        @JsonProperty("user_id")
+        @JsonAlias({"userId"})
         private String userId;
+
+        @JsonProperty("full_name")
+        @JsonAlias({"fullName", "name"})
         private String fullName;
+
         private String email;
         private String role;
         private String status;
+
+        @JsonProperty("joined_at")
+        @JsonAlias({"joinedAt"})
         private Date joinedAt;
 
         public MemberInfo() {}
@@ -59,8 +69,15 @@ public class FamilyDto {
     public static class FamilyGroupDetails {
         private String id;
         private String name;
+
+        @JsonProperty("owner_id")
+        @JsonAlias({"ownerId"})
         private String ownerId;
+
+        @JsonProperty("created_at")
+        @JsonAlias({"createdAt"})
         private Date createdAt;
+
         private List<MemberInfo> members;
 
         public FamilyGroupDetails() {}

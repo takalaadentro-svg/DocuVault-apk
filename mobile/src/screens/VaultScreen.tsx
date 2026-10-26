@@ -92,11 +92,14 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
     }
   };
 
+  const isFamilyDoc = (d: any) => Boolean(d?.is_family_vault ?? d?.family_vault ?? d?.isFamilyVault);
+
   // Filter & Search
   const filteredDocs = documents.filter(doc => {
     // Locker Mode match
-    if (lockerTab === 'personal' && doc.is_family_vault) return false;
-    if (lockerTab === 'family' && !doc.is_family_vault) return false;
+    const isFam = isFamilyDoc(doc);
+    if (lockerTab === 'personal' && isFam) return false;
+    if (lockerTab === 'family' && !isFam) return false;
 
     // Category match
     if (selectedCategory !== 'All' && (doc.category || '').toLowerCase() !== selectedCategory.toLowerCase()) {
@@ -133,8 +136,8 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
     return 0;
   });
 
-  const personalDocsCount = documents.filter(d => !d.is_family_vault).length;
-  const familyDocsCount = documents.filter(d => d.is_family_vault).length;
+  const personalDocsCount = documents.filter(d => !isFamilyDoc(d)).length;
+  const familyDocsCount = documents.filter(d => isFamilyDoc(d)).length;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 24 }}>

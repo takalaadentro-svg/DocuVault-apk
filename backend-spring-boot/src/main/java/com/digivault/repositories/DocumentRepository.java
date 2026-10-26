@@ -16,6 +16,8 @@ public interface DocumentRepository extends MongoRepository<DocumentRecord, Stri
 
     List<DocumentRecord> findByUserIdAndIsFamilyVault(String userId, boolean isFamilyVault);
 
+    List<DocumentRecord> findByUserIdInAndIsFamilyVault(List<String> userIds, boolean isFamilyVault);
+
     List<DocumentRecord> findByUserIdAndIsEmergencyEligible(String userId, boolean isEmergencyEligible);
 
     List<DocumentRecord> findByUserIdAndCategory(String userId, String category);

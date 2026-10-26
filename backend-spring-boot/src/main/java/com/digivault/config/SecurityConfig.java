@@ -52,6 +52,7 @@ public class SecurityConfig {
                 .authorizeRequests()
                 .antMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .antMatchers("/api/v1/auth/**").permitAll()
+                .antMatchers("/api/v1/family/invite-redirect").permitAll()
                 .antMatchers("/api/v1/share/public/**", "/api/v1/share/view/**").permitAll()
                 .antMatchers("/api/v1/system/**").permitAll()
                 .antMatchers("/api/v1/health/**", "/health/**").permitAll()

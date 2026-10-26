@@ -1,5 +1,7 @@
 package com.digivault.payload;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -104,16 +106,30 @@ public class DocumentDto {
         public String getCollectionName() { return collectionName; }
         public void setCollectionName(String collectionName) { this.collectionName = collectionName; }
 
+        @JsonProperty("is_family_vault")
         public boolean isFamilyVault() { return isFamilyVault; }
+
+        @JsonProperty("family_vault")
+        public boolean getFamilyVault() { return isFamilyVault; }
+
         public void setFamilyVault(boolean familyVault) { isFamilyVault = familyVault; }
 
+        @JsonProperty("is_emergency_eligible")
         public boolean isEmergencyEligible() { return isEmergencyEligible; }
+
+        @JsonProperty("emergency_eligible")
+        public boolean getEmergencyEligible() { return isEmergencyEligible; }
+
         public void setEmergencyEligible(boolean emergencyEligible) { isEmergencyEligible = emergencyEligible; }
 
+        @JsonProperty("is_favorite")
         public boolean isFavorite() { return isFavorite; }
+
         public void setFavorite(boolean favorite) { isFavorite = favorite; }
 
+        @JsonProperty("is_offline_available")
         public boolean isOfflineAvailable() { return isOfflineAvailable; }
+
         public void setOfflineAvailable(boolean offlineAvailable) { isOfflineAvailable = offlineAvailable; }
 
         public Date getCreatedAt() { return createdAt; }

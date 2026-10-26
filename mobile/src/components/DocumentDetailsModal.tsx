@@ -51,6 +51,10 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
   const [versions, setVersions] = useState<DocumentVersion[]>([]);
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [isOffline, setIsOffline] = useState(doc?.is_offline_available ?? true);
+  const [isFamilyLocker, setIsFamilyLocker] = useState(
+    Boolean(doc?.is_family_vault ?? (doc as any)?.family_vault ?? (doc as any)?.isFamilyVault)
+  );
+  const [isTogglingFamily, setIsTogglingFamily] = useState(false);
 
   // Authenticated blob preview & download state
   const [blobPreview, setBlobPreview] = useState<string | null>(() => {
@@ -250,6 +254,7 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
   useEffect(() => {
     if (isOpen && doc) {
       setIsOffline(doc.is_offline_available ?? true);
+      setIsFamilyLocker(Boolean(doc.is_family_vault ?? (doc as any).family_vault ?? (doc as any).isFamilyVault));
       if (activeTab === 'versions') {
         loadVersions();
       }
@@ -289,6 +294,28 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
       onRefresh();
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleToggleFamilyLocker = async () => {
+    if (!doc || isTogglingFamily) return;
+    const nextVal = !isFamilyLocker;
+    setIsTogglingFamily(true);
+    setIsFamilyLocker(nextVal);
+    try {
+      await api.updateDocument(doc.id, { is_family_vault: nextVal });
+      doc.is_family_vault = nextVal;
+      (doc as any).family_vault = nextVal;
+      showLocalNotification(
+        'DocuVault Family Locker',
+        nextVal ? `"${doc.title}" is now accessible by all family vault members.` : `"${doc.title}" moved to Personal Locker.`
+      );
+      onRefresh();
+    } catch (e: any) {
+      setIsFamilyLocker(!nextVal);
+      alert('Failed to update locker setting: ' + (e?.message || 'Error'));
+    } finally {
+      setIsTogglingFamily(false);
     }
   };
 
@@ -939,23 +966,42 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
 
                   {/* Locker Destination & Emergency Vault Status Box */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    <div style={{
-                      padding: 12,
-                      borderRadius: 12,
-                      backgroundColor: doc.is_family_vault ? 'rgba(59, 130, 246, 0.12)' : 'rgba(13, 148, 136, 0.12)',
-                      border: `1px solid ${doc.is_family_vault ? '#3B82F6' : colors.accent}`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                    }}>
-                      {doc.is_family_vault ? <Users size={18} color="#60A5FA" /> : <Lock size={18} color={colors.accentLight} />}
-                      <div>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: colors.text }}>
-                          {doc.is_family_vault ? 'Family Locker' : 'Personal Locker'}
+                    <div 
+                      onClick={handleToggleFamilyLocker}
+                      style={{
+                        padding: 12,
+                        borderRadius: 12,
+                        backgroundColor: isFamilyLocker ? 'rgba(59, 130, 246, 0.14)' : colors.surfaceCard,
+                        border: `1px solid ${isFamilyLocker ? '#3B82F6' : colors.surfaceBorder}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: isTogglingFamily ? 'wait' : 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                      title="Tap to toggle sharing between Family Locker and Personal Locker"
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                        {isFamilyLocker ? <Users size={18} color="#60A5FA" /> : <Lock size={18} color={colors.accentLight} />}
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: colors.text, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span>{isFamilyLocker ? 'Family Locker' : 'Personal Locker'}</span>
+                          </div>
+                          <div style={{ fontSize: 10, color: colors.textMuted }}>
+                            {isFamilyLocker ? 'Shared with family members' : 'Tap to share with family'}
+                          </div>
                         </div>
-                        <div style={{ fontSize: 10, color: colors.textMuted }}>
-                          {doc.is_family_vault ? 'Shared with family members' : 'Private to you only'}
-                        </div>
+                      </div>
+                      <div style={{
+                        padding: '3px 8px',
+                        borderRadius: 12,
+                        backgroundColor: isFamilyLocker ? 'rgba(59, 130, 246, 0.25)' : 'rgba(148, 163, 184, 0.15)',
+                        color: isFamilyLocker ? '#60A5FA' : colors.textMuted,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        flexShrink: 0,
+                      }}>
+                        {isFamilyLocker ? 'Shared' : 'Private'}
                       </div>
                     </div>
 

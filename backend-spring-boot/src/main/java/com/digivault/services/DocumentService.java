@@ -45,6 +45,10 @@ public class DocumentService {
     @Autowired
     private OcrIntegrationService ocrIntegrationService;
 
+    @Autowired
+    @org.springframework.context.annotation.Lazy
+    private FamilyService familyService;
+
     public DocumentResponse uploadDocument(
             User user,
             MultipartFile file,
@@ -157,16 +161,37 @@ public class DocumentService {
     }
 
     public List<DocumentResponse> getDocuments(User user, String category, Boolean isFamilyVault, Boolean isEmergencyEligible) {
-        List<DocumentRecord> docs = Collections.emptyList();
+        List<DocumentRecord> docs = new ArrayList<>();
         try {
-            if (isFamilyVault != null) {
-                docs = documentRepository.findByUserIdAndIsFamilyVault(user.getId(), isFamilyVault);
+            if (Boolean.TRUE.equals(isFamilyVault)) {
+                // Return user's own family docs PLUS fellow group members' family docs
+                Set<String> memberIds = (familyService != null) ? familyService.getFamilyMemberUserIds(user.getId()) : new HashSet<>();
+                memberIds.add(user.getId());
+                docs = documentRepository.findByUserIdInAndIsFamilyVault(new ArrayList<>(memberIds), true);
+            } else if (Boolean.FALSE.equals(isFamilyVault)) {
+                docs = documentRepository.findByUserIdAndIsFamilyVault(user.getId(), false);
             } else if (isEmergencyEligible != null) {
                 docs = documentRepository.findByUserIdAndIsEmergencyEligible(user.getId(), isEmergencyEligible);
             } else if (category != null && !category.isEmpty()) {
                 docs = documentRepository.findByUserIdAndCategory(user.getId(), category);
             } else {
-                docs = documentRepository.findByUserId(user.getId());
+                // All documents: user's own docs PLUS family docs shared by fellow members
+                List<DocumentRecord> ownDocs = documentRepository.findByUserId(user.getId());
+                docs.addAll(ownDocs);
+
+                if (familyService != null) {
+                    Set<String> fellowMemberIds = familyService.getFamilyMemberUserIds(user.getId());
+                    fellowMemberIds.remove(user.getId());
+                    if (!fellowMemberIds.isEmpty()) {
+                        List<DocumentRecord> sharedFamilyDocs = documentRepository.findByUserIdInAndIsFamilyVault(new ArrayList<>(fellowMemberIds), true);
+                        Set<String> existingIds = docs.stream().map(DocumentRecord::getId).collect(Collectors.toSet());
+                        for (DocumentRecord sDoc : sharedFamilyDocs) {
+                            if (!existingIds.contains(sDoc.getId())) {
+                                docs.add(sDoc);
+                            }
+                        }
+                    }
+                }
             }
         } catch (Exception e) {
             logger.warn("Database lookup error: {}", e.getMessage());
@@ -305,7 +330,11 @@ public class DocumentService {
         Optional<DocumentRecord> opt = documentRepository.findById(id);
         if (opt.isPresent()) {
             DocumentRecord doc = opt.get();
-            if (doc.getUserId().equals(user.getId()) || doc.isFamilyVault() || doc.isEmergencyEligible()) {
+            boolean isOwner = doc.getUserId().equals(user.getId());
+            boolean isFamilyShared = doc.isFamilyVault() && (familyService == null || familyService.areUsersInSameFamilyGroup(user.getId(), doc.getUserId()));
+            boolean isEmergency = doc.isEmergencyEligible();
+
+            if (isOwner || isFamilyShared || isEmergency) {
                 return doc;
             }
             throw new RuntimeException("Access Denied: You do not have permission to view this document");
