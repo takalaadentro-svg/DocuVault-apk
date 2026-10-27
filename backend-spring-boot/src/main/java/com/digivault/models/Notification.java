@@ -4,6 +4,8 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Date;
 
@@ -57,6 +59,8 @@ public class Notification {
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
 
+    @JsonProperty("user_id")
+    @JsonAlias({"userId", "user_id"})
     public String getUserId() { return userId; }
     public void setUserId(String userId) { this.userId = userId; }
 
@@ -69,21 +73,36 @@ public class Notification {
     public String getType() { return type; }
     public void setType(String type) { this.type = type; }
 
+    @JsonProperty("related_document_id")
+    @JsonAlias({"relatedDocumentId", "related_document_id"})
     public String getRelatedDocumentId() { return relatedDocumentId; }
     public void setRelatedDocumentId(String relatedDocumentId) { this.relatedDocumentId = relatedDocumentId; }
 
+    @JsonProperty("is_read")
+    @JsonAlias({"isRead", "read", "is_read"})
     public boolean isRead() { return isRead; }
+
+    @JsonProperty("read")
+    public boolean getRead() { return isRead; }
+
     public void setRead(boolean read) { isRead = read; }
+    public void setIsRead(boolean isRead) { this.isRead = isRead; }
 
     public String getChannel() { return channel; }
     public void setChannel(String channel) { this.channel = channel; }
 
+    @JsonProperty("delivery_status")
+    @JsonAlias({"deliveryStatus", "delivery_status"})
     public String getDeliveryStatus() { return deliveryStatus; }
     public void setDeliveryStatus(String deliveryStatus) { this.deliveryStatus = deliveryStatus; }
 
+    @JsonProperty("channel_category")
+    @JsonAlias({"channelCategory", "channel_category"})
     public String getChannelCategory() { return channelCategory; }
     public void setChannelCategory(String channelCategory) { this.channelCategory = channelCategory; }
 
+    @JsonProperty("created_at")
+    @JsonAlias({"createdAt", "created_at"})
     public Date getCreatedAt() { return createdAt; }
     public void setCreatedAt(Date createdAt) { this.createdAt = createdAt; }
 }

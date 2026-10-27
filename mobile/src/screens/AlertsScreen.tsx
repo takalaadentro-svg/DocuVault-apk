@@ -25,6 +25,17 @@ export const AlertsScreen: React.FC<AlertsScreenProps> = ({
   const [isChecking, setIsChecking] = useState(false);
   const [isMarkingAll, setIsMarkingAll] = useState(false);
 
+  const formatDisplayDate = (dateStr?: string) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch {
+      return dateStr;
+    }
+  };
+
   // Real-time document expiry tracking
   const expiringDocs = documents
     .filter(d => Boolean(d.expiry_date))
@@ -43,7 +54,16 @@ export const AlertsScreen: React.FC<AlertsScreenProps> = ({
     })
     .sort((a, b) => (a.days ?? 9999) - (b.days ?? 9999));
 
-  const filteredNotifs = notifications.filter(n => {
+  // Purge/filter out orphaned notifications when documents list is loaded
+  const validNotifs = notifications.filter(n => {
+    if (documents.length > 0 && n.related_document_id) {
+      const docExists = documents.some(d => d.id === n.related_document_id);
+      if (!docExists) return false;
+    }
+    return true;
+  });
+
+  const filteredNotifs = validNotifs.filter(n => {
     if (filter === 'unread') return !n.is_read;
     if (filter === 'expiry') return n.type.includes('EXPIRY') || n.type.includes('EXPIRED');
     if (filter === 'family') return n.type.includes('FAMILY');
@@ -139,8 +159,8 @@ export const AlertsScreen: React.FC<AlertsScreenProps> = ({
       {/* Filter Tabs */}
       <div style={{ display: 'flex', gap: 8 }}>
         {[
-          { id: 'all', label: `All (${notifications.length})` },
-          { id: 'unread', label: `Unread (${notifications.filter(n => !n.is_read).length})` },
+          { id: 'all', label: `All (${validNotifs.length})` },
+          { id: 'unread', label: `Unread (${validNotifs.filter(n => !n.is_read).length})` },
           { id: 'expiry', label: 'Expiry Alerts' },
           { id: 'family', label: 'Family Vault' },
         ].map(tab => (
@@ -214,14 +234,26 @@ export const AlertsScreen: React.FC<AlertsScreenProps> = ({
                     cursor: onOpenDocumentById ? 'pointer' : 'default',
                   }}
                 >
-                  <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: colors.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {doc.title}
                     </div>
-                    <div style={{ fontSize: 11, color: colors.textMuted, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span>{doc.category}</span>
+                    <div style={{
+                      fontSize: 11,
+                      color: colors.textMuted,
+                      marginTop: 2,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '40%' }}>{doc.category}</span>
                       <span>•</span>
-                      <span>Expires: {doc.expiry_date}</span>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        Expires: {formatDisplayDate(doc.expiry_date)}
+                      </span>
                     </div>
                   </div>
 
@@ -233,6 +265,7 @@ export const AlertsScreen: React.FC<AlertsScreenProps> = ({
                       fontWeight: 700,
                       backgroundColor: badgeBg,
                       color: badgeColor,
+                      whiteSpace: 'nowrap',
                     }}>
                       {isExpired 
                         ? 'EXPIRED' 
@@ -360,7 +393,7 @@ export const AlertsScreen: React.FC<AlertsScreenProps> = ({
                   </div>
                 </div>
 
-                {!n.is_read && (
+                {!n.is_read ? (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -377,6 +410,10 @@ export const AlertsScreen: React.FC<AlertsScreenProps> = ({
                   >
                     <Check size={18} />
                   </button>
+                ) : (
+                  <div title="Read" style={{ color: colors.textMuted, opacity: 0.4, padding: 4 }}>
+                    <CheckCheck size={16} />
+                  </div>
                 )}
               </div>
             );

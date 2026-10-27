@@ -125,11 +125,33 @@ public class DocumentController {
     public ResponseEntity<?> updateDocument(
             @AuthenticationPrincipal User user,
             @PathVariable("id") String id,
-            @RequestBody DocumentUpdateRequest req) {
+            @RequestBody Map<String, Object> body) {
         if (user == null) {
             return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
         }
         try {
+            ObjectMapper om = new ObjectMapper();
+            DocumentUpdateRequest req = om.convertValue(body, DocumentUpdateRequest.class);
+
+            // Resilient fallback: ensure is_family_vault and is_emergency_eligible are explicitly captured
+            for (String key : Arrays.asList("is_family_vault", "isFamilyVault", "familyVault")) {
+                if (body.containsKey(key) && body.get(key) != null) {
+                    boolean val = Boolean.parseBoolean(String.valueOf(body.get(key)));
+                    req.setIsFamilyVault(val);
+                    req.setFamilyVault(val);
+                    break;
+                }
+            }
+
+            for (String key : Arrays.asList("is_emergency_eligible", "isEmergencyEligible", "emergencyEligible")) {
+                if (body.containsKey(key) && body.get(key) != null) {
+                    boolean val = Boolean.parseBoolean(String.valueOf(body.get(key)));
+                    req.setIsEmergencyEligible(val);
+                    req.setEmergencyEligible(val);
+                    break;
+                }
+            }
+
             return ResponseEntity.ok(documentService.updateDocument(user, id, req));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Collections.singletonMap("detail", e.getMessage()));

@@ -56,6 +56,9 @@ public class DocumentService {
     @Autowired
     private CategorySuggestionService categorySuggestionService;
 
+    @Autowired(required = false)
+    private com.digivault.repositories.NotificationRepository notificationRepository;
+
     public DocumentResponse uploadDocument(
             User user,
             MultipartFile file,
@@ -316,6 +319,11 @@ public class DocumentService {
         storageService.deleteFile(doc.getStoredFilename());
         documentRepository.delete(doc);
         versionRepository.deleteByDocumentId(id);
+        if (notificationRepository != null) {
+            try {
+                notificationRepository.deleteByRelatedDocumentId(id);
+            } catch (Exception ignored) {}
+        }
     }
 
     public List<DocumentVersion> getDocumentVersions(User user, String documentId) {

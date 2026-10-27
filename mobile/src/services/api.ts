@@ -916,10 +916,28 @@ class ApiService {
   }
 
   // Notifications & Stats
+  normalizeNotification(item: any): NotificationItem {
+    return {
+      id: String(item?.id || item?._id || ''),
+      user_id: String(item?.user_id || item?.userId || ''),
+      title: String(item?.title || ''),
+      message: String(item?.message || ''),
+      type: String(item?.type || 'SYSTEM'),
+      channel: item?.channel,
+      delivery_status: item?.delivery_status || item?.deliveryStatus,
+      is_read: Boolean(item?.is_read ?? item?.isRead ?? item?.read ?? false),
+      related_document_id: item?.related_document_id || item?.relatedDocumentId,
+      created_at: item?.created_at || item?.createdAt || new Date().toISOString(),
+    };
+  }
+
   async getNotifications(): Promise<NotificationItem[]> {
     try {
-      const res = await this.request<NotificationItem[]>('/notifications/');
-      return Array.isArray(res) ? res : [];
+      const res = await this.request<any[]>('/notifications/');
+      if (Array.isArray(res)) {
+        return res.map(n => this.normalizeNotification(n));
+      }
+      return [];
     } catch (e) {
       return [];
     }

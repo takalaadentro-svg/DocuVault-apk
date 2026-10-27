@@ -62,8 +62,12 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
     setTogglingDocId(doc.id);
 
     try {
-      const updated = await api.updateDocument(doc.id, { is_family_vault: nextVal });
-      const finalVal = updated?.is_family_vault ?? nextVal;
+      const updated = await api.updateDocument(doc.id, {
+        is_family_vault: nextVal,
+        family_vault: nextVal,
+        isFamilyVault: nextVal,
+      });
+      const finalVal = updated ? isFamilyDoc(updated) : nextVal;
       doc.is_family_vault = finalVal;
       (doc as any).family_vault = finalVal;
       (doc as any).isFamilyVault = finalVal;

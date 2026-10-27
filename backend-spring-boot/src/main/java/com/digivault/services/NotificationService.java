@@ -14,8 +14,28 @@ public class NotificationService {
     @Autowired
     private NotificationRepository notificationRepository;
 
+    @Autowired(required = false)
+    private com.digivault.repositories.DocumentRepository documentRepository;
+
     public List<Notification> getUserNotifications(User user) {
-        return notificationRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
+        List<Notification> raw = notificationRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
+        if (raw == null || raw.isEmpty() || documentRepository == null) {
+            return raw != null ? raw : java.util.Collections.emptyList();
+        }
+
+        List<Notification> valid = new java.util.ArrayList<>();
+        for (Notification n : raw) {
+            if (n.getRelatedDocumentId() != null && !n.getRelatedDocumentId().trim().isEmpty()) {
+                if (!documentRepository.existsById(n.getRelatedDocumentId())) {
+                    try {
+                        notificationRepository.deleteById(n.getId());
+                    } catch (Exception ignored) {}
+                    continue;
+                }
+            }
+            valid.add(n);
+        }
+        return valid;
     }
 
     public long getUnreadCount(User user) {
