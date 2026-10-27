@@ -646,6 +646,9 @@ public class DocumentDto {
         public String getTransferCode() { return transferCode; }
         public void setTransferCode(String transferCode) { this.transferCode = transferCode; }
 
+        @com.fasterxml.jackson.annotation.JsonProperty("pairing_code")
+        public String getPairingCode() { return transferCode; }
+
         public long getExpiresInSeconds() { return expiresInSeconds; }
         public void setExpiresInSeconds(long expiresInSeconds) { this.expiresInSeconds = expiresInSeconds; }
 

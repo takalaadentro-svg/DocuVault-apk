@@ -5,6 +5,7 @@ import com.digivault.models.ShareToken;
 import com.digivault.models.User;
 import com.digivault.payload.DocumentDto.DocumentResponse;
 import com.digivault.payload.ShareDto.*;
+import com.digivault.repositories.DocumentRepository;
 import com.digivault.repositories.ShareTokenRepository;
 import com.digivault.services.ShareService;
 import com.digivault.services.StorageService;
@@ -22,6 +23,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/share")
@@ -36,6 +39,9 @@ public class ShareController {
 
     @Autowired
     private ShareTokenRepository shareTokenRepository;
+
+    @Autowired
+    private DocumentRepository documentRepository;
 
     @PostMapping({"/create", ""})
     public ResponseEntity<?> createShare(
@@ -57,8 +63,13 @@ public class ShareController {
         if (user == null) {
             return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
         }
-        List<ShareToken> tokens = shareTokenRepository.findAll();
-        return ResponseEntity.ok(tokens);
+        List<DocumentRecord> userDocs = documentRepository.findByUserId(user.getId());
+        if (userDocs == null || userDocs.isEmpty()) {
+            return ResponseEntity.ok(Collections.emptyList());
+        }
+        List<String> docIds = userDocs.stream().map(DocumentRecord::getId).collect(Collectors.toList());
+        List<ShareToken> tokens = shareTokenRepository.findByDocumentIdIn(docIds);
+        return ResponseEntity.ok(tokens != null ? tokens : Collections.emptyList());
     }
 
     @PostMapping("/{shareId}/revoke")
@@ -68,10 +79,18 @@ public class ShareController {
         if (user == null) {
             return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
         }
-        shareTokenRepository.findById(shareId).ifPresent(t -> {
-            t.setActive(false);
-            shareTokenRepository.save(t);
-        });
+        Optional<ShareToken> tokenOpt = shareTokenRepository.findById(shareId);
+        if (tokenOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        ShareToken token = tokenOpt.get();
+        // Verify document belongs to current user
+        Optional<DocumentRecord> docOpt = documentRepository.findById(token.getDocumentId());
+        if (docOpt.isEmpty() || !docOpt.get().getUserId().equals(user.getId())) {
+            return ResponseEntity.status(403).body(Collections.singletonMap("detail", "Forbidden: You do not own this shared document"));
+        }
+        token.setActive(false);
+        shareTokenRepository.save(token);
         return ResponseEntity.ok(Collections.singletonMap("message", "Share link revoked successfully"));
     }
 

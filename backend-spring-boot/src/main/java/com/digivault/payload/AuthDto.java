@@ -187,11 +187,13 @@ public class AuthDto {
 
     public static class ChangePasswordRequest {
         @com.fasterxml.jackson.annotation.JsonProperty("old_password")
+        @com.fasterxml.jackson.annotation.JsonAlias({"oldPassword", "currentPassword"})
         private String oldPassword;
 
         @NotBlank(message = "New password is required")
         @Size(min = 6, message = "Password must be at least 6 characters")
         @com.fasterxml.jackson.annotation.JsonProperty("new_password")
+        @com.fasterxml.jackson.annotation.JsonAlias({"newPassword"})
         private String newPassword;
 
         public ChangePasswordRequest() {}

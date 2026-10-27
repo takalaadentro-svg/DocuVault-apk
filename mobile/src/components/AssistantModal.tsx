@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { speechService } from '../services/speech';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import { DocumentPack, ConsistencyCheckResult, DocumentChatResponse, DocumentItem } from '../types';
 
@@ -22,7 +23,110 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({
   documents = []
 }) => {
   const { colors } = useTheme();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'chat' | 'packs' | 'consistency' | 'autofill'>('chat');
+
+  // Dynamically derive verified autofill profile from real documents and authenticated user
+  const autofillFields = React.useMemo(() => {
+    const findDoc = (pred: (d: DocumentItem) => boolean) => documents.find(pred);
+
+    // 1. Full Name
+    const nameDoc = findDoc(d => Boolean(d.holder_name?.trim()));
+    const fullName = nameDoc?.holder_name || user?.full_name || '';
+
+    // 2. DOB
+    const dobDoc = findDoc(d => Boolean(d.dob?.trim()));
+    const dob = dobDoc?.dob || '';
+
+    // 3. Aadhaar
+    const aadhaarDoc = findDoc(d => {
+      const text = `${d.title} ${d.subtype || ''} ${d.doc_type || ''}`.toLowerCase();
+      return text.includes('aadhaar') || text.includes('aadhar') || text.includes('uidai');
+    });
+    const aadhaarNum = aadhaarDoc?.doc_number || (aadhaarDoc?.ocr_text?.match(/\b\d{4}\s\d{4}\s\d{4}\b/)?.[0]) || '';
+
+    // 4. PAN
+    const panDoc = findDoc(d => {
+      const text = `${d.title} ${d.subtype || ''} ${d.doc_type || ''}`.toLowerCase();
+      return text.includes('pan') || Boolean(d.doc_number?.match(/^[A-Z]{5}[0-9]{4}[A-Z]$/i));
+    });
+    const panNum = panDoc?.doc_number || (panDoc?.ocr_text?.match(/\b[A-Z]{5}[0-9]{4}[A-Z]\b/)?.[0]) || '';
+
+    // 5. Passport
+    const passportDoc = findDoc(d => {
+      const text = `${d.title} ${d.subtype || ''} ${d.doc_type || ''}`.toLowerCase();
+      return text.includes('passport');
+    });
+    const passportNum = passportDoc?.doc_number || (passportDoc?.ocr_text?.match(/\b[A-Z][0-9]{7}\b/)?.[0]) || '';
+
+    // 6. Driving License
+    const dlDoc = findDoc(d => {
+      const text = `${d.title} ${d.subtype || ''} ${d.doc_type || ''}`.toLowerCase();
+      return text.includes('driving') || text.includes('license') || text.includes('dl');
+    });
+    const dlNum = dlDoc?.doc_number || '';
+
+    // 7. Medical / Insurance
+    const medDoc = findDoc(d => (d.category || '').toLowerCase() === 'medical');
+    const medNum = medDoc?.doc_number || '';
+
+    return [
+      {
+        label: 'Full Legal Name',
+        value: fullName,
+        source: nameDoc ? `Verified (${nameDoc.title})` : user?.full_name ? 'User Account' : 'Not in vault',
+        isAvailable: Boolean(fullName),
+      },
+      {
+        label: 'Date of Birth (DOB)',
+        value: dob,
+        source: dobDoc ? `Verified (${dobDoc.title})` : 'Not in vault',
+        isAvailable: Boolean(dob),
+      },
+      {
+        label: 'Aadhaar Number',
+        value: aadhaarNum,
+        source: aadhaarDoc ? `Verified (${aadhaarDoc.title})` : 'Not in vault',
+        isAvailable: Boolean(aadhaarNum),
+      },
+      {
+        label: 'PAN Number',
+        value: panNum,
+        source: panDoc ? `Verified (${panDoc.title})` : 'Not in vault',
+        isAvailable: Boolean(panNum),
+      },
+      {
+        label: 'Passport Number',
+        value: passportNum,
+        source: passportDoc ? `Verified (${passportDoc.title})` : 'Not in vault',
+        isAvailable: Boolean(passportNum),
+      },
+      {
+        label: 'Driving License',
+        value: dlNum,
+        source: dlDoc ? `Verified (${dlDoc.title})` : 'Not in vault',
+        isAvailable: Boolean(dlNum),
+      },
+      {
+        label: 'Health Insurance / Policy No',
+        value: medNum,
+        source: medDoc ? `Verified (${medDoc.title})` : 'Not in vault',
+        isAvailable: Boolean(medNum),
+      },
+      {
+        label: 'Registered Email',
+        value: user?.email || '',
+        source: 'Verified Account Email',
+        isAvailable: Boolean(user?.email),
+      },
+      {
+        label: 'Phone Number',
+        value: user?.phone_number || '',
+        source: user?.phone_number ? 'Verified Account Mobile' : 'Not in vault',
+        isAvailable: Boolean(user?.phone_number),
+      },
+    ];
+  }, [documents, user]);
 
   // Chat State
   const [question, setQuestion] = useState('');
@@ -681,49 +785,61 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({
               </p>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                {[
-                  { label: 'Full Legal Name', value: 'Rajesh Sharma', source: 'Passport / Aadhaar' },
-                  { label: 'Date of Birth (DOB)', value: '15/08/1990', source: 'Aadhaar Card' },
-                  { label: 'Aadhaar Number', value: '9876 5432 1098', source: 'UIDAI' },
-                  { label: 'PAN Number', value: 'ABCDE1234F', source: 'Income Tax Dept' },
-                  { label: 'Passport Number', value: 'Z1234567', source: 'Govt of India' },
-                  { label: 'Driving License', value: 'KA-01-2020-0012345', source: 'RTO Karnataka' },
-                  { label: 'Health Insurance No', value: 'P/123456/01/2026/000123', source: 'Star Health' },
-                  { label: 'Blood Group', value: 'O+ Positive', source: 'Emergency Profile' },
-                ].map((field, idx) => (
+                {autofillFields.map((field, idx) => (
                   <div
                     key={idx}
                     style={{
                       padding: 12,
                       borderRadius: 12,
                       backgroundColor: colors.bg,
-                      border: `1px solid ${colors.surfaceBorder}`,
+                      border: `1px solid ${field.isAvailable ? colors.surfaceBorder : 'rgba(255, 255, 255, 0.05)'}`,
                       display: 'flex',
                       flexDirection: 'column',
                       justifyContent: 'space-between',
+                      opacity: field.isAvailable ? 1 : 0.7,
                     }}
                   >
                     <div>
                       <div style={{ fontSize: 11, color: colors.textMuted }}>{field.label}</div>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: colors.text, marginTop: 2 }}>
-                        {field.value}
+                      <div style={{
+                        fontSize: 13,
+                        fontWeight: field.isAvailable ? 800 : 500,
+                        color: field.isAvailable ? colors.text : colors.textMuted,
+                        marginTop: 3,
+                        fontStyle: field.isAvailable ? 'normal' : 'italic',
+                        wordBreak: 'break-all',
+                      }}>
+                        {field.isAvailable ? field.value : 'Not available in vault'}
                       </div>
-                      <div style={{ fontSize: 10, color: colors.accentLight, marginTop: 2 }}>
+                      <div style={{
+                        fontSize: 10,
+                        color: field.isAvailable ? colors.accentLight : colors.textMuted,
+                        marginTop: 3,
+                      }}>
                         Source: {field.source}
                       </div>
                     </div>
                     <button
-                      onClick={() => copyToClipboard(field.value, field.label)}
+                      onClick={() => field.isAvailable && copyToClipboard(field.value, field.label)}
+                      disabled={!field.isAvailable}
                       style={{
                         marginTop: 8,
                         padding: '6px 10px',
                         borderRadius: 8,
-                        backgroundColor: copiedField === field.label ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.06)',
+                        backgroundColor: !field.isAvailable 
+                          ? 'rgba(255,255,255,0.03)' 
+                          : copiedField === field.label 
+                            ? 'rgba(16, 185, 129, 0.2)' 
+                            : 'rgba(255,255,255,0.06)',
                         border: 'none',
-                        color: copiedField === field.label ? colors.success : colors.text,
+                        color: !field.isAvailable 
+                          ? colors.textMuted 
+                          : copiedField === field.label 
+                            ? colors.success 
+                            : colors.text,
                         fontSize: 11,
                         fontWeight: 700,
-                        cursor: 'pointer',
+                        cursor: field.isAvailable ? 'pointer' : 'not-allowed',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -731,7 +847,13 @@ export const AssistantModal: React.FC<AssistantModalProps> = ({
                       }}
                     >
                       {copiedField === field.label ? <Check size={12} /> : <Copy size={12} />}
-                      <span>{copiedField === field.label ? 'Copied' : 'Copy Value'}</span>
+                      <span>
+                        {!field.isAvailable 
+                          ? 'No Data' 
+                          : copiedField === field.label 
+                            ? 'Copied' 
+                            : 'Copy Value'}
+                      </span>
                     </button>
                   </div>
                 ))}

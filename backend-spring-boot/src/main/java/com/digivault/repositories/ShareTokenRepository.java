@@ -11,4 +11,5 @@ import java.util.Optional;
 public interface ShareTokenRepository extends MongoRepository<ShareToken, String> {
     Optional<ShareToken> findByToken(String token);
     List<ShareToken> findByDocumentId(String documentId);
+    List<ShareToken> findByDocumentIdIn(List<String> documentIds);
 }

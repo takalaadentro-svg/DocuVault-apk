@@ -30,11 +30,31 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) =>
   const [quickPinMsg, setQuickPinMsg] = useState<{ text: string; isError: boolean } | null>(null);
   const [isSettingQuickPin, setIsSettingQuickPin] = useState(false);
 
-  // Multi-Channel Notifications Preferences
-  const [notifInApp, setNotifInApp] = useState(true);
-  const [notifPushFcm, setNotifPushFcm] = useState(true);
-  const [notifEmail, setNotifEmail] = useState(true);
-  const [notifSmsWhatsapp, setNotifSmsWhatsapp] = useState(false);
+  // Multi-Channel Notifications Preferences (persisted in localStorage)
+  const [notifInApp, setNotifInApp] = useState(() => {
+    try {
+      const saved = localStorage.getItem('docuvault_notif_prefs');
+      return saved ? JSON.parse(saved).inApp ?? true : true;
+    } catch { return true; }
+  });
+  const [notifPushFcm, setNotifPushFcm] = useState(() => {
+    try {
+      const saved = localStorage.getItem('docuvault_notif_prefs');
+      return saved ? JSON.parse(saved).pushFcm ?? true : true;
+    } catch { return true; }
+  });
+  const [notifEmail, setNotifEmail] = useState(() => {
+    try {
+      const saved = localStorage.getItem('docuvault_notif_prefs');
+      return saved ? JSON.parse(saved).email ?? true : true;
+    } catch { return true; }
+  });
+  const [notifSmsWhatsapp, setNotifSmsWhatsapp] = useState(() => {
+    try {
+      const saved = localStorage.getItem('docuvault_notif_prefs');
+      return saved ? JSON.parse(saved).smsWhatsapp ?? false : false;
+    } catch { return false; }
+  });
   const [notifSavedMsg, setNotifSavedMsg] = useState(false);
 
   // Phone-to-Phone Transfer State
@@ -79,7 +99,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) =>
     }
   };
 
-  const handleSaveNotifPrefs = () => {
+  const handleSaveNotifPrefs = (key?: 'inApp' | 'pushFcm' | 'email' | 'smsWhatsapp', nextVal?: boolean) => {
+    try {
+      const current = {
+        inApp: key === 'inApp' ? nextVal : notifInApp,
+        pushFcm: key === 'pushFcm' ? nextVal : notifPushFcm,
+        email: key === 'email' ? nextVal : notifEmail,
+        smsWhatsapp: key === 'smsWhatsapp' ? nextVal : notifSmsWhatsapp,
+      };
+      localStorage.setItem('docuvault_notif_prefs', JSON.stringify(current));
+    } catch (e) {}
     setNotifSavedMsg(true);
     setTimeout(() => setNotifSavedMsg(false), 2000);
   };
@@ -502,10 +531,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) =>
 
         <div style={{ padding: '8px 16px', display: 'flex', flexDirection: 'column' }}>
           {[
-            { label: 'In-App Notifications', desc: 'Real-time alert drawer & banner updates', val: notifInApp, set: setNotifInApp },
-            { label: 'Push Notifications (FCM)', desc: 'Mobile background push for urgent expiry alerts', val: notifPushFcm, set: setNotifPushFcm },
-            { label: 'Verified Email (Transactional)', desc: 'Detailed PDF renewal briefs and family invitations', val: notifEmail, set: setNotifEmail },
-            { label: 'SMS & WhatsApp Alerts', desc: 'High-priority 7-day and 1-day expiry reminders', val: notifSmsWhatsapp, set: setNotifSmsWhatsapp },
+            { key: 'inApp' as const, label: 'In-App Notifications', desc: 'Real-time alert drawer & banner updates', val: notifInApp, set: setNotifInApp },
+            { key: 'pushFcm' as const, label: 'Push Notifications (FCM)', desc: 'Mobile background push for urgent expiry alerts', val: notifPushFcm, set: setNotifPushFcm },
+            { key: 'email' as const, label: 'Verified Email (Transactional)', desc: 'Detailed PDF renewal briefs and family invitations', val: notifEmail, set: setNotifEmail },
+            { key: 'smsWhatsapp' as const, label: 'SMS & WhatsApp Alerts', desc: 'High-priority 7-day and 1-day expiry reminders', val: notifSmsWhatsapp, set: setNotifSmsWhatsapp },
           ].map((item, idx) => (
             <div key={idx} style={{
               display: 'flex',
@@ -523,7 +552,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) =>
                 checked={item.val}
                 onChange={e => {
                   item.set(e.target.checked);
-                  handleSaveNotifPrefs();
+                  handleSaveNotifPrefs(item.key, e.target.checked);
                 }}
                 style={{ width: 18, height: 18, accentColor: colors.accent, cursor: 'pointer' }}
               />
@@ -609,10 +638,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) =>
                 }}>
                   <div style={{ fontSize: 11, color: '#8B5CF6', fontWeight: 600 }}>ONE-TIME PAIRING CODE</div>
                   <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: 4, color: colors.text, margin: '6px 0' }}>
-                    {transferData.pairing_code}
+                    {transferData.pairing_code || transferData.transferCode}
                   </div>
                   <div style={{ fontSize: 11, color: colors.textMuted }}>
-                    {transferData.document_count} document(s) bundled • Valid for 10 minutes
+                    {transferData.document_count ?? transferData.documentCount ?? 0} document(s) bundled • Valid for 10 minutes
                   </div>
                 </div>
               ) : (

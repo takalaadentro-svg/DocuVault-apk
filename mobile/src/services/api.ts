@@ -630,16 +630,28 @@ class ApiService {
 
   async generateTransferCode(): Promise<PhoneTransferPairing> {
     try {
-      return await this.request<PhoneTransferPairing>('/system/transfer/generate', {
+      const res = await this.request<any>('/system/transfer/generate', {
         method: 'POST'
       });
+      const code = res?.transfer_code || res?.transferCode || res?.pairing_code || '';
+      const count = res?.document_count ?? res?.documentCount ?? 0;
+      return {
+        transferCode: code,
+        pairing_code: code,
+        expiresInSeconds: res?.expires_in_seconds ?? res?.expiresInSeconds ?? 600,
+        qrCodeData: res?.qr_code_data ?? res?.qrCodeData ?? `docuvault://transfer?code=${code}`,
+        documentCount: count,
+        document_count: count,
+      };
     } catch (e) {
       const code = 'DV-' + Math.floor(100000 + Math.random() * 900000);
       return {
         transferCode: code,
+        pairing_code: code,
         expiresInSeconds: 600,
         qrCodeData: `docuvault://transfer?code=${code}`,
-        documentCount: 0
+        documentCount: 0,
+        document_count: 0,
       };
     }
   }

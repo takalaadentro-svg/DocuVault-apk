@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Bell, CheckCheck, RefreshCw, AlertTriangle, 
-  Calendar, Users, ShieldAlert, Sparkles, Check 
+  Calendar, Users, ShieldAlert, Sparkles, Check, FileText 
 } from 'lucide-react';
 import { NotificationItem } from '../types';
 import { api } from '../services/api';
@@ -16,6 +16,7 @@ interface AlertsScreenProps {
 export const AlertsScreen: React.FC<AlertsScreenProps> = ({
   notifications,
   onRefresh,
+  onOpenDocumentById,
 }) => {
   const { colors } = useTheme();
   const [filter, setFilter] = useState<'all' | 'unread' | 'expiry' | 'family'>('all');
@@ -152,6 +153,12 @@ export const AlertsScreen: React.FC<AlertsScreenProps> = ({
             return (
               <div
                 key={n.id}
+                onClick={() => {
+                  if (n.related_document_id && onOpenDocumentById) {
+                    if (!n.is_read) handleMarkAsRead(n.id);
+                    onOpenDocumentById(n.related_document_id);
+                  }
+                }}
                 style={{
                   padding: 16,
                   borderRadius: 14,
@@ -162,6 +169,8 @@ export const AlertsScreen: React.FC<AlertsScreenProps> = ({
                   justifyContent: 'space-between',
                   gap: 12,
                   boxShadow: !n.is_read ? '0 4px 12px rgba(13, 148, 136, 0.15)' : 'none',
+                  cursor: (n.related_document_id && onOpenDocumentById) ? 'pointer' : 'default',
+                  transition: 'transform 0.15s ease, box-shadow 0.15s ease',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
@@ -198,12 +207,40 @@ export const AlertsScreen: React.FC<AlertsScreenProps> = ({
                     <div style={{ fontSize: 11, color: colors.textMuted, marginTop: 6 }}>
                       {new Date(n.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                     </div>
+                    {n.related_document_id && onOpenDocumentById && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!n.is_read) handleMarkAsRead(n.id);
+                          onOpenDocumentById(n.related_document_id!);
+                        }}
+                        style={{
+                          marginTop: 8,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '4px 10px',
+                          borderRadius: 8,
+                          backgroundColor: 'rgba(13, 148, 136, 0.15)',
+                          border: `1px solid ${colors.accent}`,
+                          color: colors.accentLight,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <FileText size={12} /> View Linked Document
+                      </button>
+                    )}
                   </div>
                 </div>
 
                 {!n.is_read && (
                   <button
-                    onClick={() => handleMarkAsRead(n.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleMarkAsRead(n.id);
+                    }}
                     title="Mark as read"
                     style={{
                       background: 'none',

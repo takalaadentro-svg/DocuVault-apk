@@ -143,6 +143,20 @@ export const AppContent: React.FC = () => {
     queryClient.invalidateQueries();
   };
 
+  const handleOpenDocumentById = async (docId: string) => {
+    const doc = documents.find(d => d.id === docId) || sharedWithMe.find(d => d.id === docId);
+    if (doc) {
+      setSelectedDocForDetails(doc);
+    } else {
+      try {
+        const fetched = await api.getDocument(docId);
+        if (fetched) setSelectedDocForDetails(fetched);
+      } catch (e) {
+        showToast('Document could not be found or access has expired.');
+      }
+    }
+  };
+
   if (authLoading) {
     return (
       <div style={{
@@ -314,6 +328,7 @@ export const AppContent: React.FC = () => {
             <AlertsScreen
               notifications={notifications}
               onRefresh={handleRefreshAll}
+              onOpenDocumentById={handleOpenDocumentById}
             />
           )}
 

@@ -45,6 +45,9 @@ public class ShareService {
     @Autowired
     private AuditLogRepository auditLogRepository;
 
+    @org.springframework.beans.factory.annotation.Value("${digivault.frontend.url:https://docuvault-apk.vercel.app}")
+    private String frontendUrl;
+
     public ShareResponse createShareToken(User user, CreateShareRequest req) {
         DocumentRecord doc = documentService.findAndAuthorize(user, req.getDocumentId());
 
@@ -67,7 +70,9 @@ public class ShareService {
 
         shareTokenRepository.save(shareToken);
 
-        String shareUrl = "http://localhost:5173/share/" + token;
+        String base = (frontendUrl != null && !frontendUrl.isBlank()) ? frontendUrl.trim() : "https://docuvault-apk.vercel.app";
+        if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
+        String shareUrl = base + "/share/" + token;
         String qrBase64 = generateQrCodeBase64(shareUrl, 250, 250);
 
         ShareResponse response = new ShareResponse();

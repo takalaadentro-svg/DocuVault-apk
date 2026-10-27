@@ -133,9 +133,9 @@ public class EmergencyController {
         List<DocumentResponse> emergencyDocs = documentService.getDocuments(user, null, null, true);
 
         Map<String, Object> resp = new HashMap<>();
-        resp.put("owner_name", user.getFullName() != null ? user.getFullName() : "Rajesh Sharma");
-        resp.put("owner_phone", user.getPhone() != null ? user.getPhone() : "+91 98765 43210");
-        resp.put("owner_email", user.getEmail() != null ? user.getEmail() : "demo@digivault.app");
+        resp.put("owner_name", user.getFullName() != null && !user.getFullName().isBlank() ? user.getFullName() : "Vault Owner");
+        resp.put("owner_phone", user.getPhone() != null && !user.getPhone().isBlank() ? user.getPhone() : "");
+        resp.put("owner_email", user.getEmail() != null ? user.getEmail() : "");
         resp.put("medical_info", medInfo);
         resp.put("eligible_documents", emergencyDocs);
         resp.put("message", "Emergency access authorized: " + reason);
