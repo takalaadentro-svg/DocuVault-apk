@@ -1,6 +1,7 @@
 package com.digivault.controllers;
 
 import com.digivault.models.User;
+import com.digivault.payload.AuthDto;
 import com.digivault.payload.AuthDto.*;
 import com.digivault.services.AuthService;
 import org.springframework.beans.factory.annotation.Autowired;

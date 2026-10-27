@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.*;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -40,8 +41,15 @@ public class OcrIntegrationService {
     @Autowired
     private CategorySuggestionService categorySuggestionService;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    public OcrIntegrationService() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(4000); // 4 seconds connect timeout
+        factory.setReadTimeout(7000);    // 7 seconds read timeout
+        this.restTemplate = new RestTemplate(factory);
+    }
 
     /**
      * Process document file for OCR text extraction, structured entity parsing,

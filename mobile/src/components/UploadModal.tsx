@@ -29,6 +29,75 @@ const CATEGORIES = [
   'Other'
 ];
 
+/**
+ * Client-side high-quality image compressor.
+ * Downscales camera images > 1.2MB to max 1920px at 0.82 JPEG quality.
+ * Shrinks 5-15MB phone photos to ~400KB, preventing timeouts and upload lag.
+ */
+const compressImageIfNeeded = async (originalFile: File): Promise<File> => {
+  if (!originalFile.type.startsWith('image/') || originalFile.size <= 1.2 * 1024 * 1024) {
+    return originalFile;
+  }
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(originalFile);
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const canvas = document.createElement('canvas');
+      let { width, height } = img;
+      const MAX_DIM = 1920;
+
+      if (width > MAX_DIM || height > MAX_DIM) {
+        if (width > height) {
+          height = Math.round((height * MAX_DIM) / width);
+          width = MAX_DIM;
+        } else {
+          width = Math.round((width * MAX_DIM) / height);
+          height = MAX_DIM;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(originalFile);
+        return;
+      }
+
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob(
+        (blob) => {
+          if (blob && blob.size < originalFile.size) {
+            const cleanBase = originalFile.name.replace(/\.[^.]+$/, '');
+            const compressedFile = new File([blob], `${cleanBase}.jpg`, {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            });
+            resolve(compressedFile);
+          } else {
+            resolve(originalFile);
+          }
+        },
+        'image/jpeg',
+        0.82
+      );
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(originalFile);
+    };
+
+    img.src = objectUrl;
+  });
+};
+
 export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, defaultFamilyVault = false, onClose, onSuccess }) => {
   const { colors } = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -66,10 +135,15 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, defaultFamilyV
 
   if (!isOpen) return null;
 
-  const handleProcessFile = async (selectedFile: File) => {
-    setFile(selectedFile);
+  const handleProcessFile = async (rawFile: File) => {
+    setIsOcrScanning(true);
+    setErrorMessage(null);
     setOcrResult(null);
     setDuplicateWarning(null);
+
+    // Auto-compress large phone camera photos to accelerate OCR and network upload
+    const selectedFile = await compressImageIfNeeded(rawFile);
+    setFile(selectedFile);
 
     // Auto-generate clean title
     const cleanName = selectedFile.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
@@ -77,8 +151,6 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, defaultFamilyV
     setTitle(autoTitle);
 
     // Trigger Smart OCR & Quality Scanning
-    setIsOcrScanning(true);
-    setErrorMessage(null);
     try {
       const result = await api.ocrExtract(selectedFile);
       setOcrResult(result);

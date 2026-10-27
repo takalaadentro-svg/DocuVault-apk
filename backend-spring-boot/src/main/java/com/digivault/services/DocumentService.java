@@ -53,6 +53,9 @@ public class DocumentService {
     @org.springframework.context.annotation.Lazy
     private ExpiryReminderScheduler expiryReminderScheduler;
 
+    @Autowired
+    private CategorySuggestionService categorySuggestionService;
+
     public DocumentResponse uploadDocument(
             User user,
             MultipartFile file,
@@ -65,6 +68,7 @@ public class DocumentService {
             String docNumber,
             String dob,
             String notes,
+            String clientOcrText,
             Boolean isFamilyVault,
             Boolean isEmergencyEligible,
             Boolean isOfflineAvailable,
@@ -76,8 +80,22 @@ public class DocumentService {
             String sha256 = documentDnaService.calculateSha256(fileBytes);
             String storedFilename = storageService.storeFile(file);
 
-            // Run OCR & category suggestion
-            OcrScanResponse ocrScan = ocrIntegrationService.extractTextAndSuggestCategory(file);
+            // Run OCR & category suggestion:
+            // If client already extracted OCR text, reuse it for instant zero-latency processing
+            OcrScanResponse ocrScan;
+            if (clientOcrText != null && clientOcrText.trim().length() > 5) {
+                CategorySuggestionService.SuggestionResult suggestion =
+                        categorySuggestionService.suggestCategory(clientOcrText, file.getOriginalFilename());
+                ocrScan = new OcrScanResponse(
+                        clientOcrText.trim(),
+                        suggestion.getCategory(),
+                        suggestion.getDocType(),
+                        suggestion.getConfidence()
+                );
+                ocrScan.setSubtype(suggestion.getSubtype());
+            } else {
+                ocrScan = ocrIntegrationService.extractTextAndSuggestCategory(file);
+            }
 
             String finalCategory = (category != null && !category.trim().isEmpty())
                     ? category.trim()
@@ -123,7 +141,7 @@ public class DocumentService {
             record.setFileSize(file.getSize());
             record.setMimeType(file.getContentType());
             record.setSha256Hash(sha256);
-            if (fileBytes != null && fileBytes.length < 12 * 1024 * 1024) {
+            if (fileBytes != null && fileBytes.length < 3 * 1024 * 1024) {
                 record.setBase64Data(Base64.getEncoder().encodeToString(fileBytes));
             }
             String rawOcr = (clientOcrText != null && clientOcrText.trim().length() > 5)

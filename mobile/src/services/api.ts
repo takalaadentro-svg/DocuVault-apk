@@ -66,7 +66,7 @@ class ApiService {
     return null;
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  private async request<T>(endpoint: string, options: RequestInit = {}, timeoutMs: number = 60000): Promise<T> {
     const headers = new Headers(options.headers || {});
     
     // Inject Authorization header if token exists and not already provided
@@ -79,9 +79,9 @@ class ApiService {
       headers.set('Content-Type', 'application/json');
     }
 
-    // 60-second timeout to handle cloud cold-starts & uploads smoothly
+    // Configurable timeout (default 60s, up to 180s for uploads) to handle cloud cold-starts smoothly
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       const response = await fetch(`${BASE_URL}${endpoint}`, {
@@ -214,7 +214,7 @@ class ApiService {
     return this.request<DocumentItem>('/documents/upload', {
       method: 'POST',
       body: formData
-    });
+    }, 180000); // 3-minute timeout for document uploads to accommodate Render cold-starts & file transfer
   }
 
   async ocrExtract(file: File): Promise<OCRExtractResult> {
