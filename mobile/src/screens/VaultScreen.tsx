@@ -62,12 +62,14 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
     setTogglingDocId(doc.id);
 
     try {
-      await api.updateDocument(doc.id, { is_family_vault: nextVal });
-      doc.is_family_vault = nextVal;
-      (doc as any).family_vault = nextVal;
+      const updated = await api.updateDocument(doc.id, { is_family_vault: nextVal });
+      const finalVal = updated?.is_family_vault ?? nextVal;
+      doc.is_family_vault = finalVal;
+      (doc as any).family_vault = finalVal;
+      (doc as any).isFamilyVault = finalVal;
       showLocalNotification(
         'DocuVault Vault Access',
-        nextVal
+        finalVal
           ? `"${doc.title}" shared to Family Locker. Group members can now access it.`
           : `"${doc.title}" moved to Personal Locker. Access removed for group members.`
       );

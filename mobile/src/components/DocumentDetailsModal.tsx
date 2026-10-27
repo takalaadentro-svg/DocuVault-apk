@@ -303,12 +303,15 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
     setIsTogglingFamily(true);
     setIsFamilyLocker(nextVal);
     try {
-      await api.updateDocument(doc.id, { is_family_vault: nextVal });
-      doc.is_family_vault = nextVal;
-      (doc as any).family_vault = nextVal;
+      const updated = await api.updateDocument(doc.id, { is_family_vault: nextVal });
+      const finalVal = updated?.is_family_vault ?? nextVal;
+      setIsFamilyLocker(finalVal);
+      doc.is_family_vault = finalVal;
+      (doc as any).family_vault = finalVal;
+      (doc as any).isFamilyVault = finalVal;
       showLocalNotification(
         'DocuVault Family Locker',
-        nextVal ? `"${doc.title}" is now accessible by all family vault members.` : `"${doc.title}" moved to Personal Locker.`
+        finalVal ? `"${doc.title}" is now accessible by all family vault members.` : `"${doc.title}" moved to Personal Locker.`
       );
       onRefresh();
     } catch (e: any) {

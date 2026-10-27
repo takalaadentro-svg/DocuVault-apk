@@ -3,18 +3,20 @@ import {
   Bell, CheckCheck, RefreshCw, AlertTriangle, 
   Calendar, Users, ShieldAlert, Sparkles, Check, FileText 
 } from 'lucide-react';
-import { NotificationItem } from '../types';
+import { DocumentItem, NotificationItem } from '../types';
 import { api } from '../services/api';
 import { useTheme } from '../context/ThemeContext';
 
 interface AlertsScreenProps {
   notifications: NotificationItem[];
+  documents?: DocumentItem[];
   onRefresh: () => void;
   onOpenDocumentById?: (docId: string) => void;
 }
 
 export const AlertsScreen: React.FC<AlertsScreenProps> = ({
   notifications,
+  documents = [],
   onRefresh,
   onOpenDocumentById,
 }) => {
@@ -22,6 +24,24 @@ export const AlertsScreen: React.FC<AlertsScreenProps> = ({
   const [filter, setFilter] = useState<'all' | 'unread' | 'expiry' | 'family'>('all');
   const [isChecking, setIsChecking] = useState(false);
   const [isMarkingAll, setIsMarkingAll] = useState(false);
+
+  // Real-time document expiry tracking
+  const expiringDocs = documents
+    .filter(d => Boolean(d.expiry_date))
+    .map(d => {
+      let days = d.days_until_expiry ?? null;
+      let isExpired = d.is_expired ?? false;
+      if (d.expiry_date) {
+        const expTime = new Date(d.expiry_date).getTime();
+        const now = Date.now();
+        if (!isNaN(expTime)) {
+          isExpired = expTime < now;
+          days = Math.ceil((expTime - now) / (1000 * 60 * 60 * 24));
+        }
+      }
+      return { doc: d, days, isExpired };
+    })
+    .sort((a, b) => (a.days ?? 9999) - (b.days ?? 9999));
 
   const filteredNotifs = notifications.filter(n => {
     if (filter === 'unread') return !n.is_read;
@@ -142,6 +162,111 @@ export const AlertsScreen: React.FC<AlertsScreenProps> = ({
           </button>
         ))}
       </div>
+
+      {/* Real-time Document Expiry Tracker */}
+      {(filter === 'all' || filter === 'expiry') && expiringDocs.length > 0 && (
+        <div style={{
+          padding: 16,
+          borderRadius: 14,
+          backgroundColor: 'rgba(245, 158, 11, 0.08)',
+          border: `1px solid rgba(245, 158, 11, 0.3)`,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Calendar size={18} color={colors.warning} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>
+                Live Document Expiry Tracker ({expiringDocs.length})
+              </span>
+            </div>
+            <span style={{ fontSize: 11, color: colors.warning, fontWeight: 700 }}>
+              {expiringDocs.filter(e => e.isExpired).length > 0 
+                ? `${expiringDocs.filter(e => e.isExpired).length} Expired` 
+                : `${expiringDocs.length} Monitored`}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {expiringDocs.map(({ doc, days, isExpired }) => {
+              const isUrgent = isExpired || (days !== null && days <= 7);
+              const badgeBg = isExpired 
+                ? 'rgba(239, 68, 68, 0.2)' 
+                : isUrgent 
+                  ? 'rgba(245, 158, 11, 0.2)' 
+                  : 'rgba(13, 148, 136, 0.15)';
+              const badgeColor = isExpired ? colors.danger : isUrgent ? colors.warning : colors.accentLight;
+
+              return (
+                <div
+                  key={doc.id}
+                  onClick={() => onOpenDocumentById && onOpenDocumentById(doc.id)}
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    backgroundColor: colors.surface,
+                    border: `1px solid ${colors.surfaceBorder}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                    cursor: onOpenDocumentById ? 'pointer' : 'default',
+                  }}
+                >
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: colors.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {doc.title}
+                    </div>
+                    <div style={{ fontSize: 11, color: colors.textMuted, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>{doc.category}</span>
+                      <span>•</span>
+                      <span>Expires: {doc.expiry_date}</span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    <span style={{
+                      padding: '4px 8px',
+                      borderRadius: 8,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      backgroundColor: badgeBg,
+                      color: badgeColor,
+                    }}>
+                      {isExpired 
+                        ? 'EXPIRED' 
+                        : days === 0 
+                          ? 'Expires Today' 
+                          : `${days}d left`}
+                    </span>
+                    {onOpenDocumentById && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenDocumentById(doc.id);
+                        }}
+                        style={{
+                          padding: '4px 8px',
+                          borderRadius: 6,
+                          backgroundColor: 'transparent',
+                          border: `1px solid ${colors.surfaceBorder}`,
+                          color: colors.textMuted,
+                          fontSize: 11,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        View
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Notifications Feed */}
       {filteredNotifs.length > 0 ? (

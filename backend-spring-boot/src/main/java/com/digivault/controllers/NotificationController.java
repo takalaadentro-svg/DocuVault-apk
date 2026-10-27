@@ -41,6 +41,11 @@ public class NotificationController {
         if (user == null) {
             return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
         }
+        if (expiryReminderScheduler != null) {
+            try {
+                expiryReminderScheduler.checkDocumentExpiriesForUser(user.getId());
+            } catch (Exception ignored) {}
+        }
         List<Notification> list = notificationService.getUserNotifications(user);
         if (list == null) {
             list = Collections.emptyList();
@@ -86,12 +91,15 @@ public class NotificationController {
         if (user == null) {
             return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
         }
+        int alerts = 0;
         if (expiryReminderScheduler != null) {
             try {
-                expiryReminderScheduler.checkDocumentExpiries();
+                alerts = expiryReminderScheduler.checkDocumentExpiriesForUser(user.getId());
             } catch (Exception ignored) {}
         }
-        return ResponseEntity.ok(Collections.singletonMap("message", "Expiry scan completed successfully"));
+        return ResponseEntity.ok(Collections.singletonMap("message", alerts > 0 
+                ? String.format("Expiry scan completed. %d document alert(s) updated.", alerts)
+                : "Expiry scan completed. All documents verified."));
     }
 
     @GetMapping("/dashboard-stats")

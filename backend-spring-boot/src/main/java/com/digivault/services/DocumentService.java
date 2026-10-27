@@ -49,6 +49,10 @@ public class DocumentService {
     @org.springframework.context.annotation.Lazy
     private FamilyService familyService;
 
+    @Autowired
+    @org.springframework.context.annotation.Lazy
+    private ExpiryReminderScheduler expiryReminderScheduler;
+
     public DocumentResponse uploadDocument(
             User user,
             MultipartFile file,
@@ -143,6 +147,12 @@ public class DocumentService {
             record.setUpdatedAt(new Date());
 
             DocumentRecord saved = documentRepository.save(record);
+
+            if (saved.getExpiryDate() != null && expiryReminderScheduler != null) {
+                try {
+                    expiryReminderScheduler.checkDocumentExpiriesForUser(user.getId());
+                } catch (Exception ignored) {}
+            }
 
             // Record initial version 1
             DocumentVersion v1 = new DocumentVersion(
@@ -256,15 +266,31 @@ public class DocumentService {
         if (req.getNotes() != null) doc.setNotes(req.getNotes());
         if (req.getExpiryDate() != null) doc.setExpiryDate(req.getExpiryDate());
         if (req.getIssueDate() != null) doc.setIssueDate(req.getIssueDate());
-        if (req.getFamilyVault() != null) doc.setFamilyVault(req.getFamilyVault());
-        if (req.getEmergencyEligible() != null) doc.setEmergencyEligible(req.getEmergencyEligible());
+        Boolean famVal = req.getFamilyVault() != null ? req.getFamilyVault() : req.getIsFamilyVault();
+        if (famVal != null) {
+            doc.setFamilyVault(famVal);
+            doc.setIsFamilyVault(famVal);
+        }
+        Boolean emergVal = req.getEmergencyEligible() != null ? req.getEmergencyEligible() : req.getIsEmergencyEligible();
+        if (emergVal != null) {
+            doc.setEmergencyEligible(emergVal);
+            doc.setIsEmergencyEligible(emergVal);
+        }
         if (req.getFavorite() != null) doc.setFavorite(req.getFavorite());
         if (req.getOfflineAvailable() != null) doc.setOfflineAvailable(req.getOfflineAvailable());
         if (req.getCollectionName() != null) doc.setCollectionName(req.getCollectionName());
 
         doc.setVersion(nextVersion);
         doc.setUpdatedAt(new Date());
-        return toResponse(documentRepository.save(doc));
+        DocumentRecord updated = documentRepository.save(doc);
+
+        if (updated.getExpiryDate() != null && expiryReminderScheduler != null) {
+            try {
+                expiryReminderScheduler.checkDocumentExpiriesForUser(user.getId());
+            } catch (Exception ignored) {}
+        }
+
+        return toResponse(updated);
     }
 
     public void deleteDocument(User user, String id) {

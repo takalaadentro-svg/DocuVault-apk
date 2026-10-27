@@ -6,6 +6,7 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.index.TextIndexed;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.Field;
 
 import java.util.Date;
 
@@ -83,10 +84,12 @@ public class DocumentRecord {
     private String collectionName;
 
     /** True if document belongs to Family Vault; False if Personal Vault */
+    @Field("isFamilyVault")
     @Indexed
     private boolean isFamilyVault = false;
 
     /** True if document is accessible in Emergency Vault Break-Glass mode */
+    @Field("isEmergencyEligible")
     @Indexed
     private boolean isEmergencyEligible = false;
 
@@ -176,10 +179,16 @@ public class DocumentRecord {
     public void setCollectionName(String collectionName) { this.collectionName = collectionName; }
 
     public boolean isFamilyVault() { return isFamilyVault; }
-    public void setFamilyVault(boolean familyVault) { isFamilyVault = familyVault; }
+    public boolean getIsFamilyVault() { return isFamilyVault; }
+    public boolean getFamilyVault() { return isFamilyVault; }
+    public void setFamilyVault(boolean familyVault) { this.isFamilyVault = familyVault; }
+    public void setIsFamilyVault(boolean isFamilyVault) { this.isFamilyVault = isFamilyVault; }
 
     public boolean isEmergencyEligible() { return isEmergencyEligible; }
-    public void setEmergencyEligible(boolean emergencyEligible) { isEmergencyEligible = emergencyEligible; }
+    public boolean getIsEmergencyEligible() { return isEmergencyEligible; }
+    public boolean getEmergencyEligible() { return isEmergencyEligible; }
+    public void setEmergencyEligible(boolean emergencyEligible) { this.isEmergencyEligible = emergencyEligible; }
+    public void setIsEmergencyEligible(boolean isEmergencyEligible) { this.isEmergencyEligible = isEmergencyEligible; }
 
     public boolean isFavorite() { return isFavorite; }
     public void setFavorite(boolean favorite) { isFavorite = favorite; }

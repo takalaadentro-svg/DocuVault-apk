@@ -109,18 +109,26 @@ public class DocumentDto {
         @JsonProperty("is_family_vault")
         public boolean isFamilyVault() { return isFamilyVault; }
 
+        @JsonProperty("is_family_vault")
+        public boolean getIsFamilyVault() { return isFamilyVault; }
+
         @JsonProperty("family_vault")
         public boolean getFamilyVault() { return isFamilyVault; }
 
         public void setFamilyVault(boolean familyVault) { isFamilyVault = familyVault; }
+        public void setIsFamilyVault(boolean isFamilyVault) { this.isFamilyVault = isFamilyVault; }
 
         @JsonProperty("is_emergency_eligible")
         public boolean isEmergencyEligible() { return isEmergencyEligible; }
+
+        @JsonProperty("is_emergency_eligible")
+        public boolean getIsEmergencyEligible() { return isEmergencyEligible; }
 
         @JsonProperty("emergency_eligible")
         public boolean getEmergencyEligible() { return isEmergencyEligible; }
 
         public void setEmergencyEligible(boolean emergencyEligible) { isEmergencyEligible = emergencyEligible; }
+        public void setIsEmergencyEligible(boolean isEmergencyEligible) { this.isEmergencyEligible = isEmergencyEligible; }
 
         @JsonProperty("is_favorite")
         public boolean isFavorite() { return isFavorite; }
@@ -171,10 +179,17 @@ public class DocumentDto {
         private String docNumber;
         private String dob;
         private String notes;
+
+        @JsonProperty("expiry_date")
+        @JsonAlias({"expiryDate", "expiry_date"})
         private Date expiryDate;
+
+        @JsonProperty("issue_date")
+        @JsonAlias({"issueDate", "issue_date"})
         private Date issueDate;
+
         @JsonProperty("is_family_vault")
-        @JsonAlias({"isFamilyVault", "familyVault"})
+        @JsonAlias({"isFamilyVault", "familyVault", "is_family_vault"})
         private Boolean isFamilyVault;
 
         @JsonProperty("is_emergency_eligible")
@@ -226,14 +241,36 @@ public class DocumentDto {
         public Date getIssueDate() { return issueDate; }
         public void setIssueDate(Date issueDate) { this.issueDate = issueDate; }
 
+        @JsonProperty("is_family_vault")
+        @JsonAlias({"isFamilyVault", "familyVault", "is_family_vault"})
         public Boolean getFamilyVault() { return isFamilyVault; }
+
+        @JsonProperty("is_family_vault")
+        @JsonAlias({"isFamilyVault", "familyVault", "is_family_vault"})
         public void setFamilyVault(Boolean familyVault) { isFamilyVault = familyVault; }
+
+        @JsonProperty("is_family_vault")
+        @JsonAlias({"isFamilyVault", "familyVault", "is_family_vault"})
         public Boolean getIsFamilyVault() { return isFamilyVault; }
+
+        @JsonProperty("is_family_vault")
+        @JsonAlias({"isFamilyVault", "familyVault", "is_family_vault"})
         public void setIsFamilyVault(Boolean val) { this.isFamilyVault = val; }
 
+        @JsonProperty("is_emergency_eligible")
+        @JsonAlias({"isEmergencyEligible", "emergencyEligible", "is_emergency_eligible"})
         public Boolean getEmergencyEligible() { return isEmergencyEligible; }
+
+        @JsonProperty("is_emergency_eligible")
+        @JsonAlias({"isEmergencyEligible", "emergencyEligible", "is_emergency_eligible"})
         public void setEmergencyEligible(Boolean emergencyEligible) { isEmergencyEligible = emergencyEligible; }
+
+        @JsonProperty("is_emergency_eligible")
+        @JsonAlias({"isEmergencyEligible", "emergencyEligible", "is_emergency_eligible"})
         public Boolean getIsEmergencyEligible() { return isEmergencyEligible; }
+
+        @JsonProperty("is_emergency_eligible")
+        @JsonAlias({"isEmergencyEligible", "emergencyEligible", "is_emergency_eligible"})
         public void setIsEmergencyEligible(Boolean val) { this.isEmergencyEligible = val; }
 
         public Boolean getFavorite() { return isFavorite; }

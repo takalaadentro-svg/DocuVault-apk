@@ -267,16 +267,51 @@ class ApiService {
     
     const queryStr = searchParams.toString();
     try {
-      const docs = await this.request<DocumentItem[]>(`/documents${queryStr ? `?${queryStr}` : ''}`);
-      return Array.isArray(docs) ? docs : [];
+      const docs = await this.request<any[]>(`/documents${queryStr ? `?${queryStr}` : ''}`);
+      if (Array.isArray(docs)) {
+        return docs.map(d => this.normalizeDocument(d));
+      }
+      return [];
     } catch (e) {
       console.warn('Could not load documents from server:', e);
       return [];
     }
   }
 
+  normalizeDocument(d: any): DocumentItem {
+    if (!d) return d;
+    const isFam = Boolean(d.is_family_vault ?? d.family_vault ?? d.isFamilyVault);
+    const isEmerg = Boolean(d.is_emergency_eligible ?? d.emergency_eligible ?? d.isEmergencyEligible);
+    let isExp = Boolean(d.is_expired);
+    let daysUntil: number | null = d.days_until_expiry ?? null;
+
+    if (d.expiry_date) {
+      try {
+        const expTime = new Date(d.expiry_date).getTime();
+        if (!isNaN(expTime)) {
+          const now = Date.now();
+          isExp = expTime < now;
+          daysUntil = Math.ceil((expTime - now) / (1000 * 60 * 60 * 24));
+        }
+      } catch (err) {}
+    }
+
+    return {
+      ...d,
+      is_family_vault: isFam,
+      family_vault: isFam,
+      isFamilyVault: isFam,
+      is_emergency_eligible: isEmerg,
+      emergency_eligible: isEmerg,
+      isEmergencyEligible: isEmerg,
+      is_expired: isExp,
+      days_until_expiry: daysUntil,
+    };
+  }
+
   async getDocument(id: string): Promise<DocumentItem> {
-    return this.request<DocumentItem>(`/documents/${id}`);
+    const raw = await this.request<any>(`/documents/${id}`);
+    return this.normalizeDocument(raw);
   }
 
   async updateDocument(id: string, data: Partial<DocumentItem> & Record<string, any>): Promise<DocumentItem> {
@@ -284,15 +319,18 @@ class ApiService {
     if (payload.is_family_vault !== undefined) {
       payload.isFamilyVault = payload.is_family_vault;
       payload.familyVault = payload.is_family_vault;
+      payload.is_family_vault = payload.is_family_vault;
     }
     if (payload.is_emergency_eligible !== undefined) {
       payload.isEmergencyEligible = payload.is_emergency_eligible;
       payload.emergencyEligible = payload.is_emergency_eligible;
+      payload.is_emergency_eligible = payload.is_emergency_eligible;
     }
-    return this.request<DocumentItem>(`/documents/${id}`, {
+    const res = await this.request<any>(`/documents/${id}`, {
       method: 'PUT',
       body: JSON.stringify(payload)
     });
+    return this.normalizeDocument(res);
   }
 
   async deleteDocument(id: string) {

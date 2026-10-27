@@ -327,6 +327,7 @@ export const AppContent: React.FC = () => {
           {currentTab === 'alerts' && (
             <AlertsScreen
               notifications={notifications}
+              documents={documents}
               onRefresh={handleRefreshAll}
               onOpenDocumentById={handleOpenDocumentById}
             />
