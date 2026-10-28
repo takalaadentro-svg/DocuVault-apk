@@ -154,6 +154,16 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
     return Array.from(map.values());
   }, [sharedWithMe, sharedByMe, documents, families]);
 
+  // Resilient fallback: cache last-known vault documents so background query updates never flash empty
+  const lastKnownDocsRef = React.useRef<DocumentItem[]>([]);
+  React.useEffect(() => {
+    if (allVaultDocuments.length > 0) {
+      lastKnownDocsRef.current = allVaultDocuments;
+    }
+  }, [allVaultDocuments]);
+
+  const activeVaultDocs = allVaultDocuments.length > 0 ? allVaultDocuments : lastKnownDocsRef.current;
+
   const [docScope, setDocScope] = useState<'all' | 'active'>('all');
 
   const isSender = (doc: DocumentItem): boolean => {
@@ -224,13 +234,16 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
         const uid = String(m.userId || m.user_id || m.id || '');
         if (uid) memberUserIds.add(uid);
       });
-      return allVaultDocuments.filter(d => {
+      const primaryDocIds = new Set<string>(
+        ((primaryFamily as any).documents || []).map((d: any) => String(d?.id || ''))
+      );
+      return activeVaultDocs.filter(d => {
         const dUid = String((d as any).userId || (d as any).user_id || (d as any).ownerId || (d as any).owner_id || '');
-        return memberUserIds.has(dUid) || isSender(d);
+        return memberUserIds.has(dUid) || isSender(d) || primaryDocIds.has(d.id);
       });
     }
-    return allVaultDocuments;
-  }, [allVaultDocuments, docScope, primaryFamily, user?.id]);
+    return activeVaultDocs;
+  }, [activeVaultDocs, docScope, primaryFamily, user?.id]);
 
   const filteredVaultDocs = React.useMemo(() => {
     if (docsFilter === 'others') {
@@ -551,7 +564,7 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
       }}>
         {[
           { id: 'members', label: 'Members', icon: Users },
-          { id: 'shared_vault', label: `Shared Vault (${allVaultDocuments.length})`, icon: FolderLock },
+          { id: 'shared_vault', label: `Shared Vault (${activeVaultDocs.length})`, icon: FolderLock },
           { id: 'emergency', label: 'Emergency', icon: ShieldAlert },
         ].map(tab => {
           const isSelected = activeTab === tab.id || (tab.id === 'shared_vault' && ((activeTab as any) === 'shared_with_me' || (activeTab as any) === 'shared_by_me'));
@@ -1041,7 +1054,7 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
                   </div>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>
-                      {allVaultDocuments.length} Document{allVaultDocuments.length === 1 ? '' : 's'} Available in this Vault
+                      {activeVaultDocs.length} Document{activeVaultDocs.length === 1 ? '' : 's'} Available in this Vault
                     </div>
                     <div style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
                       Tap to view all documents shared by family members
@@ -1253,7 +1266,7 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
                   </div>
                   <div style={{ fontSize: 11, color: colors.textMuted }}>
                     {primaryFamily?.name ? `${primaryFamily.name} • ` : ''}
-                    {allVaultDocuments.length} document{allVaultDocuments.length === 1 ? '' : 's'} shared in total
+                    {activeVaultDocs.length} document{activeVaultDocs.length === 1 ? '' : 's'} shared in total
                   </div>
                 </div>
               </div>
@@ -1315,7 +1328,7 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
                     cursor: 'pointer',
                   }}
                 >
-                  All Vaults ({allVaultDocuments.length})
+                  All Vaults ({activeVaultDocs.length})
                 </button>
                 <button
                   type="button"

@@ -131,52 +131,100 @@ export const AppContent: React.FC = () => {
   });
 
   const { data: sharedWithMe = [], refetch: refetchSharedWithMe } = useQuery<DocumentItem[]>({
-    queryKey: ['shared_with_me'],
+    queryKey: ['shared_with_me', user?.id],
     queryFn: async () => {
-      const fromApi = await api.getSharedWithMe();
       const mergedMap = new Map<string, DocumentItem>();
-      (fromApi || []).forEach(d => {
-        if (d && d.id) mergedMap.set(d.id, d);
-      });
 
-      // Also ensure all documents from all families' member caches are merged
-      const currentFamilies = families.length > 0 ? families : await api.getFamilies().catch(() => []);
-      (currentFamilies || []).forEach(f => {
-        ((f as any).documents || []).forEach((d: any) => {
-          const dUid = String(d?.user_id || d?.userId || d?.owner_id || d?.ownerId || '');
-          const myUid = String(user?.id || '');
-          if (d && d.id && dUid && myUid && dUid !== myUid && !mergedMap.has(d.id)) {
-            mergedMap.set(d.id, {
-              ...d,
-              is_family_vault: true,
-              family_vault: true,
-              isFamilyVault: true,
+      // 1. Seed with previously cached shared documents from localStorage for instantaneous persistence
+      try {
+        const stored = localStorage.getItem(`docuvault_cached_shared_with_me_${user?.id || 'guest'}`);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((d: DocumentItem) => {
+              if (d && d.id) mergedMap.set(d.id, d);
             });
           }
+        }
+      } catch (e) {}
+
+      // 2. Fetch fresh shared documents from backend API
+      try {
+        const fromApi = await api.getSharedWithMe();
+        (fromApi || []).forEach(d => {
+          if (d && d.id) mergedMap.set(d.id, d);
         });
-      });
-      return Array.from(mergedMap.values());
+      } catch (e) {
+        console.warn('api.getSharedWithMe fetch failed, using cached vault state:', e);
+      }
+
+      // 3. Also ensure all documents from all families' member caches are merged
+      try {
+        const currentFamilies = families.length > 0 ? families : await api.getFamilies().catch(() => []);
+        (currentFamilies || []).forEach(f => {
+          ((f as any).documents || []).forEach((d: any) => {
+            const dUid = String(d?.user_id || d?.userId || d?.owner_id || d?.ownerId || '');
+            const myUid = String(user?.id || '');
+            if (d && d.id && (!myUid || !dUid || dUid !== myUid)) {
+              mergedMap.set(d.id, {
+                ...d,
+                is_family_vault: true,
+                family_vault: true,
+                isFamilyVault: true,
+              });
+            }
+          });
+        });
+      } catch (e) {}
+
+      const result = Array.from(mergedMap.values());
+      try {
+        localStorage.setItem(`docuvault_cached_shared_with_me_${user?.id || 'guest'}`, JSON.stringify(result));
+      } catch (e) {}
+      return result;
     },
     enabled: isAuthenticated,
     refetchInterval: 12000,
   });
 
   const { data: sharedByMe = [], refetch: refetchSharedByMe } = useQuery<DocumentItem[]>({
-    queryKey: ['shared_by_me'],
+    queryKey: ['shared_by_me', user?.id],
     queryFn: async () => {
-      const fromApi = await api.getSharedByMe();
       const mergedMap = new Map<string, DocumentItem>();
-      (fromApi || []).forEach(d => {
-        if (d && d.id) mergedMap.set(d.id, d);
-      });
+
+      try {
+        const stored = localStorage.getItem(`docuvault_cached_shared_by_me_${user?.id || 'guest'}`);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((d: DocumentItem) => {
+              if (d && d.id) mergedMap.set(d.id, d);
+            });
+          }
+        }
+      } catch (e) {}
+
+      try {
+        const fromApi = await api.getSharedByMe();
+        (fromApi || []).forEach(d => {
+          if (d && d.id) mergedMap.set(d.id, d);
+        });
+      } catch (e) {
+        console.warn('api.getSharedByMe fetch failed, using cached vault state:', e);
+      }
 
       (documents || []).forEach(d => {
         const isFam = Boolean(d?.is_family_vault ?? (d as any)?.family_vault ?? (d as any)?.isFamilyVault);
-        if (d && d.id && isFam && !mergedMap.has(d.id)) {
+        if (d && d.id && isFam) {
           mergedMap.set(d.id, d);
         }
       });
-      return Array.from(mergedMap.values());
+
+      const result = Array.from(mergedMap.values());
+      try {
+        localStorage.setItem(`docuvault_cached_shared_by_me_${user?.id || 'guest'}`, JSON.stringify(result));
+      } catch (e) {}
+      return result;
     },
     enabled: isAuthenticated,
     refetchInterval: 12000,

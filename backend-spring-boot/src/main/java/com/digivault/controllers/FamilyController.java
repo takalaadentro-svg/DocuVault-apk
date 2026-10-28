@@ -167,8 +167,9 @@ public class FamilyController {
         if (user == null) {
             return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
         }
-        Set<String> fellowMemberIds = familyService.getFamilyMemberUserIds(user.getId());
-        fellowMemberIds.remove(user.getId());
+        String myUid = (user.getId() != null) ? user.getId().trim() : "";
+        Set<String> fellowMemberIds = familyService.getFamilyMemberUserIds(myUid);
+        fellowMemberIds.removeIf(id -> id == null || id.trim().isEmpty() || id.equalsIgnoreCase(myUid));
         if (fellowMemberIds.isEmpty()) {
             return ResponseEntity.ok(Collections.emptyList());
         }

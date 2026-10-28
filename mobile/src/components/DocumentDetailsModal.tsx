@@ -13,6 +13,7 @@ import { DocumentItem, DocumentDNAVerificationResult, DocumentVersion } from '..
 import { api } from '../services/api';
 import { previewCache } from '../services/previewCache';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { PDFPreviewViewer } from './PDFPreviewViewer';
 
 interface DocumentDetailsModalProps {
@@ -31,7 +32,15 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
   onOpenQRShare,
 }) => {
   const { colors } = useTheme();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'preview' | 'details' | 'ocr' | 'dna' | 'versions' | 'permissions'>('preview');
+
+  const isOwner = React.useMemo(() => {
+    if (!doc || !user) return false;
+    const docUid = String(doc.user_id || (doc as any).userId || (doc as any).owner_id || (doc as any).ownerId || '');
+    const currentUid = String(user.id || '');
+    return Boolean(docUid && currentUid && docUid === currentUid);
+  }, [doc, user]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -253,13 +262,16 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
 
   useEffect(() => {
     if (isOpen && doc) {
+      setActiveTab('preview');
+      setIsEditing(false);
+      setShowDeleteConfirm(false);
       setIsOffline(doc.is_offline_available ?? true);
       setIsFamilyLocker(Boolean(doc.is_family_vault ?? (doc as any).family_vault ?? (doc as any).isFamilyVault));
       if (activeTab === 'versions') {
         loadVersions();
       }
     }
-  }, [isOpen, doc, activeTab]);
+  }, [isOpen, doc?.id]);
 
   const loadVersions = async () => {
     if (!doc) return;
@@ -299,7 +311,20 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
 
   const handleToggleFamilyLocker = async () => {
     if (!doc || isTogglingFamily) return;
+    if (!isOwner) {
+      alert('Only the family member who uploaded this document can change its locker destination.');
+      return;
+    }
+
     const nextVal = !isFamilyLocker;
+    const confirmMessage = nextVal
+      ? `Share "${doc.title}" to Family Locker?\n\nAll members in your family vault will be able to view and access this document.`
+      : `Move "${doc.title}" to Personal Locker?\n\nThis will remove the document from the Family Vault. Only you will have access to it in your Personal Locker.`;
+
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
     setIsTogglingFamily(true);
     setIsFamilyLocker(nextVal);
     try {
@@ -973,44 +998,83 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
 
                   {/* Locker Destination & Emergency Vault Status Box */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    <div 
-                      onClick={handleToggleFamilyLocker}
-                      style={{
-                        padding: 12,
-                        borderRadius: 12,
-                        backgroundColor: isFamilyLocker ? 'rgba(59, 130, 246, 0.14)' : colors.surfaceCard,
-                        border: `1px solid ${isFamilyLocker ? '#3B82F6' : colors.surfaceBorder}`,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        cursor: isTogglingFamily ? 'wait' : 'pointer',
-                        transition: 'all 0.15s ease',
-                      }}
-                      title="Tap to toggle sharing between Family Locker and Personal Locker"
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                        {isFamilyLocker ? <Users size={18} color="#60A5FA" /> : <Lock size={18} color={colors.accentLight} />}
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: colors.text, display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <span>{isFamilyLocker ? 'Family Locker' : 'Personal Locker'}</span>
-                          </div>
-                          <div style={{ fontSize: 10, color: colors.textMuted }}>
-                            {isFamilyLocker ? 'Shared with family members' : 'Tap to share with family'}
+                    {isOwner ? (
+                      <div 
+                        onClick={handleToggleFamilyLocker}
+                        style={{
+                          padding: 12,
+                          borderRadius: 12,
+                          backgroundColor: isFamilyLocker ? 'rgba(59, 130, 246, 0.14)' : colors.surfaceCard,
+                          border: `1px solid ${isFamilyLocker ? '#3B82F6' : colors.surfaceBorder}`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          cursor: isTogglingFamily ? 'wait' : 'pointer',
+                          transition: 'all 0.15s ease',
+                        }}
+                        title="Tap to change locker destination"
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                          {isFamilyLocker ? <Users size={18} color="#60A5FA" /> : <Lock size={18} color={colors.accentLight} />}
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: colors.text, display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span>{isFamilyLocker ? 'Family Locker' : 'Personal Locker'}</span>
+                            </div>
+                            <div style={{ fontSize: 10, color: colors.textMuted }}>
+                              {isFamilyLocker ? 'Shared • Tap to make personal' : 'Private • Tap to share'}
+                            </div>
                           </div>
                         </div>
+                        <div style={{
+                          padding: '3px 8px',
+                          borderRadius: 12,
+                          backgroundColor: isFamilyLocker ? 'rgba(59, 130, 246, 0.25)' : 'rgba(148, 163, 184, 0.15)',
+                          color: isFamilyLocker ? '#60A5FA' : colors.textMuted,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          flexShrink: 0,
+                        }}>
+                          {isFamilyLocker ? 'Shared' : 'Private'}
+                        </div>
                       </div>
-                      <div style={{
-                        padding: '3px 8px',
-                        borderRadius: 12,
-                        backgroundColor: isFamilyLocker ? 'rgba(59, 130, 246, 0.25)' : 'rgba(148, 163, 184, 0.15)',
-                        color: isFamilyLocker ? '#60A5FA' : colors.textMuted,
-                        fontSize: 10,
-                        fontWeight: 700,
-                        flexShrink: 0,
-                      }}>
-                        {isFamilyLocker ? 'Shared' : 'Private'}
+                    ) : (
+                      <div 
+                        style={{
+                          padding: 12,
+                          borderRadius: 12,
+                          backgroundColor: 'rgba(59, 130, 246, 0.14)',
+                          border: '1px solid #3B82F6',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          cursor: 'default',
+                        }}
+                        title="Shared by family member"
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                          <Users size={18} color="#60A5FA" />
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: colors.text, display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span>Family Locker</span>
+                            </div>
+                            <div style={{ fontSize: 10, color: colors.textMuted }}>
+                              Shared by family member
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{
+                          padding: '3px 8px',
+                          borderRadius: 12,
+                          backgroundColor: 'rgba(59, 130, 246, 0.25)',
+                          color: '#60A5FA',
+                          fontSize: 10,
+                          fontWeight: 700,
+                          flexShrink: 0,
+                        }}>
+                          Shared
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     <div style={{
                       padding: 12,
@@ -1614,51 +1678,70 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
                   <span>Create QR Share</span>
                 </button>
 
-                {/* Edit */}
+                {/* Edit - Sender only */}
+                {isOwner && (
+                  <button
+                    onClick={() => {
+                      setActiveTab('details');
+                      handleStartEdit();
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      backgroundColor: colors.surface,
+                      border: `1px solid ${colors.surfaceBorder}`,
+                      color: colors.text,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Edit3 size={14} />
+                    <span>Edit</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Delete - Sender only */}
+              {isOwner ? (
                 <button
-                  onClick={() => {
-                    setActiveTab('details');
-                    handleStartEdit();
-                  }}
+                  onClick={() => setShowDeleteConfirm(true)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: 6,
                     padding: '8px 12px',
                     borderRadius: 8,
-                    backgroundColor: colors.surface,
-                    border: `1px solid ${colors.surfaceBorder}`,
-                    color: colors.text,
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.25)',
+                    color: colors.danger,
                     fontSize: 12,
                     fontWeight: 600,
                     cursor: 'pointer',
                   }}
                 >
-                  <Edit3 size={14} />
-                  <span>Edit</span>
+                  <Trash2 size={14} />
+                  <span>Delete</span>
                 </button>
-              </div>
-
-              {/* Delete */}
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                style={{
+              ) : (
+                <div style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 6,
-                  padding: '8px 12px',
+                  gap: 5,
+                  fontSize: 11,
+                  color: colors.textMuted,
+                  padding: '6px 10px',
+                  backgroundColor: colors.surface,
                   borderRadius: 8,
-                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                  border: '1px solid rgba(239, 68, 68, 0.25)',
-                  color: colors.danger,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                <Trash2 size={14} />
-                <span>Delete</span>
-              </button>
+                  border: `1px solid ${colors.surfaceBorder}`,
+                }}>
+                  <ShieldCheck size={14} color={colors.accentLight} />
+                  <span>Family Shared • View Only</span>
+                </div>
+              )}
             </>
           )}
         </div>
