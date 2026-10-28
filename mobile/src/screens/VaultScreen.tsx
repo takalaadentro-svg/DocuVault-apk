@@ -12,6 +12,7 @@ import { showLocalNotification } from '../services/pushNotifications';
 
 interface VaultScreenProps {
   documents: DocumentItem[];
+  sharedWithMe?: DocumentItem[];
   selectedCategory: string;
   onSelectCategory: (cat: string) => void;
   onOpenUpload: (isFamily?: boolean) => void;
@@ -35,6 +36,7 @@ const CATEGORIES = [
 
 export const VaultScreen: React.FC<VaultScreenProps> = ({
   documents,
+  sharedWithMe = [],
   selectedCategory,
   onSelectCategory,
   onOpenUpload,
@@ -130,8 +132,24 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
     }
   };
 
+  // Merge user's own documents and documents shared via Family Vault
+  const combinedDocs = React.useMemo(() => {
+    const ownDocs = (documents || []).map(d => ({ ...d, _isSharedWithMe: false }));
+    const ownIds = new Set(ownDocs.map(d => d.id));
+    const incomingShared = (sharedWithMe || [])
+      .filter(d => !ownIds.has(d.id))
+      .map(d => ({
+        ...d,
+        _isSharedWithMe: true,
+        is_family_vault: true,
+        family_vault: true,
+        isFamilyVault: true,
+      }));
+    return [...ownDocs, ...incomingShared];
+  }, [documents, sharedWithMe]);
+
   // Filter & Search
-  const filteredDocs = documents.filter(doc => {
+  const filteredDocs = combinedDocs.filter(doc => {
     // Locker Mode match
     const isFam = isFamilyDoc(doc);
     if (lockerTab === 'personal' && isFam) return false;
@@ -172,8 +190,8 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
     return 0;
   });
 
-  const personalDocsCount = documents.filter(d => !isFamilyDoc(d)).length;
-  const familyDocsCount = documents.filter(d => isFamilyDoc(d)).length;
+  const personalDocsCount = combinedDocs.filter(d => !isFamilyDoc(d)).length;
+  const familyDocsCount = combinedDocs.filter(d => isFamilyDoc(d)).length;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 24 }}>
@@ -182,7 +200,7 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 800, color: colors.text }}>Document Locker</h1>
           <p style={{ fontSize: 12, color: colors.textMuted }}>
-            {documents.length} secure artifacts ({personalDocsCount} Personal • {familyDocsCount} Family)
+            {combinedDocs.length} secure artifacts ({personalDocsCount} Personal • {familyDocsCount} Family)
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -260,7 +278,7 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
         >
           <span>All Vaults</span>
           <span style={{ fontSize: 10, opacity: 0.85, padding: '1px 6px', borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)' }}>
-            {documents.length}
+            {combinedDocs.length}
           </span>
         </button>
 
@@ -633,29 +651,49 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
                       EMERGENCY
                     </span>
                   )}
-                  <button
-                    type="button"
-                    onClick={(e) => handleToggleFamilyAccess(e, doc)}
-                    disabled={togglingDocId === doc.id}
-                    title={isFamilyDoc(doc) ? "In Family Locker (Tap to remove access)" : "Personal Locker (Tap to grant family access)"}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      padding: '6px 9px',
-                      borderRadius: 8,
-                      backgroundColor: isFamilyDoc(doc) ? 'rgba(59, 130, 246, 0.18)' : 'rgba(255, 255, 255, 0.05)',
-                      border: `1px solid ${isFamilyDoc(doc) ? '#3B82F6' : colors.surfaceBorder}`,
-                      color: isFamilyDoc(doc) ? '#60A5FA' : colors.textMuted,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      cursor: togglingDocId === doc.id ? 'wait' : 'pointer',
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    {isFamilyDoc(doc) ? <Users size={13} color="#60A5FA" /> : <Lock size={13} color={colors.textMuted} />}
-                    <span style={{ fontSize: 10 }}>{isFamilyDoc(doc) ? 'Family' : 'Personal'}</span>
-                  </button>
+                  {(doc as any)._isSharedWithMe ? (
+                    <span
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '6px 9px',
+                        borderRadius: 8,
+                        backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        color: '#60A5FA',
+                        fontSize: 10,
+                        fontWeight: 700,
+                      }}
+                    >
+                      <Users size={12} color="#60A5FA" />
+                      <span>Shared with You</span>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => handleToggleFamilyAccess(e, doc)}
+                      disabled={togglingDocId === doc.id}
+                      title={isFamilyDoc(doc) ? "In Family Locker (Tap to remove access)" : "Personal Locker (Tap to grant family access)"}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '6px 9px',
+                        borderRadius: 8,
+                        backgroundColor: isFamilyDoc(doc) ? 'rgba(59, 130, 246, 0.18)' : 'rgba(255, 255, 255, 0.05)',
+                        border: `1px solid ${isFamilyDoc(doc) ? '#3B82F6' : colors.surfaceBorder}`,
+                        color: isFamilyDoc(doc) ? '#60A5FA' : colors.textMuted,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: togglingDocId === doc.id ? 'wait' : 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      {isFamilyDoc(doc) ? <Users size={13} color="#60A5FA" /> : <Lock size={13} color={colors.textMuted} />}
+                      <span style={{ fontSize: 10 }}>{isFamilyDoc(doc) ? 'Family' : 'Personal'}</span>
+                    </button>
+                  )}
 
                   <button
                     onClick={(e) => {

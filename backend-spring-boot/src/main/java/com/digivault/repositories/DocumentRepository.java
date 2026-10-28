@@ -14,10 +14,10 @@ public interface DocumentRepository extends MongoRepository<DocumentRecord, Stri
 
     List<DocumentRecord> findByUserId(String userId);
 
-    @Query("{ 'userId': ?0, 'isFamilyVault': ?1 }")
+    @Query("{ 'userId': ?0, '$or': [ { 'isFamilyVault': ?1 }, { 'familyVault': ?1 }, { 'is_family_vault': ?1 } ] }")
     List<DocumentRecord> findByUserIdAndIsFamilyVault(String userId, boolean isFamilyVault);
 
-    @Query("{ 'userId': { '$in': ?0 }, 'isFamilyVault': ?1 }")
+    @Query("{ 'userId': { '$in': ?0 }, '$or': [ { 'isFamilyVault': ?1 }, { 'familyVault': ?1 }, { 'is_family_vault': ?1 } ] }")
     List<DocumentRecord> findByUserIdInAndIsFamilyVault(List<String> userIds, boolean isFamilyVault);
 
     @Query("{ 'userId': ?0, 'isEmergencyEligible': ?1 }")

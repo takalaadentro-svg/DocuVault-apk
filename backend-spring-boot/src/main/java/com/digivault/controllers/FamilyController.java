@@ -34,6 +34,9 @@ public class FamilyController {
     @Autowired
     private DocumentService documentService;
 
+    @Autowired
+    private com.digivault.repositories.UserRepository userRepository;
+
     @GetMapping({"", "/"})
     public ResponseEntity<?> getFamilyGroup(@AuthenticationPrincipal User user) {
         if (user == null) {
@@ -135,7 +138,20 @@ public class FamilyController {
             return ResponseEntity.ok(Collections.emptyList());
         }
         List<DocumentRecord> docs = documentRepository.findByUserIdInAndIsFamilyVault(new ArrayList<>(fellowMemberIds), true);
-        List<DocumentResponse> responses = docs.stream().map(documentService::toResponse).collect(Collectors.toList());
+        List<DocumentResponse> responses = docs.stream().map(doc -> {
+            DocumentResponse resp = documentService.toResponse(doc);
+            if (userRepository != null && doc.getUserId() != null) {
+                userRepository.findById(doc.getUserId()).ifPresent(u -> {
+                    if (resp.getHolderName() == null || resp.getHolderName().isBlank()) {
+                        resp.setHolderName(u.getFullName());
+                    }
+                    if (resp.getIssuer() == null || resp.getIssuer().isBlank() || "Personal".equalsIgnoreCase(resp.getIssuer()) || "Personal Record".equalsIgnoreCase(resp.getIssuer())) {
+                        resp.setIssuer("Shared by " + u.getFullName());
+                    }
+                });
+            }
+            return resp;
+        }).collect(Collectors.toList());
         return ResponseEntity.ok(responses);
     }
 

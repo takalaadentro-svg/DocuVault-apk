@@ -71,12 +71,15 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
   const primaryFamily = React.useMemo(() => {
     if (!families || families.length === 0) return null;
     if (selectedFamilyId) {
-      const match = families.find(f => f.id === selectedFamilyId);
+      const match = families.find(f => (f.id || (f as any)._id) === selectedFamilyId);
       if (match) return match;
     }
     const multiMember = families.find(f => (f.members?.length || 0) > 1);
-    return multiMember || families[0];
-  }, [families, selectedFamilyId]);
+    if (multiMember) return multiMember;
+    const joined = families.find(f => f.owner_id !== user?.id && (f as any).ownerId !== user?.id);
+    if (joined) return joined;
+    return families[0];
+  }, [families, selectedFamilyId, user?.id]);
 
     // Auto-accept invitation from email deep link if token is present
   React.useEffect(() => {
@@ -376,6 +379,7 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
                 }}>
                   {families.map(f => {
                     const isSelected = f.id === primaryFamily.id;
+                    const isOwner = f.owner_id === user?.id || (f as any).ownerId === user?.id;
                     return (
                       <button
                         key={f.id}
@@ -409,6 +413,14 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
                         }}>
                           {f.members?.length || 0}
                         </span>
+                        <span style={{
+                          fontSize: 9,
+                          opacity: 0.8,
+                          textTransform: 'uppercase',
+                          fontWeight: 700,
+                        }}>
+                          {isOwner ? 'Admin' : 'Member'}
+                        </span>
                       </button>
                     );
                   })}
@@ -430,6 +442,9 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
                   <div style={{ fontSize: 18, fontWeight: 800, color: colors.text, marginTop: 2 }}>
                     {primaryFamily.name}
                   </div>
+                  <div style={{ fontSize: 11, color: colors.accentLight, marginTop: 2 }}>
+                    {primaryFamily.owner_id === user?.id ? 'Organized by You' : 'Shared Group Locker'}
+                  </div>
                 </div>
                 <div style={{
                   padding: '4px 10px',
@@ -442,6 +457,36 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
                   {primaryFamily.members?.length || 0} Members
                 </div>
               </div>
+
+              {/* Shared Documents Quick Access Strip */}
+              {sharedWithMe.length > 0 && (
+                <div
+                  onClick={() => setActiveTab('shared_with_me')}
+                  style={{
+                    padding: '12px 14px',
+                    borderRadius: 12,
+                    backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                    border: '1px solid rgba(59, 130, 246, 0.3)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <FileText size={18} color="#3B82F6" />
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>
+                        {sharedWithMe.length} Document{sharedWithMe.length > 1 ? 's' : ''} Available in this Vault
+                      </div>
+                      <div style={{ fontSize: 11, color: colors.textMuted }}>
+                        Tap to view documents shared by family members
+                      </div>
+                    </div>
+                  </div>
+                  <ArrowRight size={16} color="#3B82F6" />
+                </div>
+              )}
 
               {/* Members List */}
               <div style={{ fontSize: 13, fontWeight: 700, color: colors.textMuted, marginTop: 4 }}>
@@ -621,24 +666,64 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
                 key={doc.id}
                 onClick={() => onOpenDocument(doc)}
                 style={{
-                  padding: 14,
-                  borderRadius: 12,
+                  padding: 16,
+                  borderRadius: 14,
                   backgroundColor: colors.surfaceCard,
                   border: `1px solid ${colors.surfaceBorder}`,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
+                  gap: 12,
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <FileText size={20} color={colors.accentLight} />
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: colors.text }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
+                  <div style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 10,
+                    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    color: '#3B82F6',
+                  }}>
+                    <FileText size={20} />
+                  </div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{
+                      fontSize: 14,
+                      fontWeight: 700,
+                      color: colors.text,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}>
                       {doc.title}
                     </div>
-                    <div style={{ fontSize: 12, color: colors.textMuted }}>
-                      {doc.category} • {doc.issuer || 'Family Vault Record'}
+                    <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span>{doc.category || 'General'}</span>
+                      <span>•</span>
+                      <span style={{ color: colors.accentLight, fontWeight: 600 }}>
+                        {doc.issuer || (doc.holder_name ? `Shared by ${doc.holder_name}` : 'Family Member')}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                      <span style={{
+                        padding: '1px 6px',
+                        borderRadius: 4,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                        color: '#3B82F6',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 3,
+                      }}>
+                        <Users size={10} />
+                        <span>Family Locker</span>
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -648,14 +733,15 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
                     onOpenDocument(doc);
                   }}
                   style={{
-                    padding: '6px 12px',
-                    borderRadius: 6,
-                    backgroundColor: colors.surface,
-                    border: `1px solid ${colors.surfaceBorder}`,
-                    color: colors.text,
+                    padding: '8px 14px',
+                    borderRadius: 8,
+                    backgroundColor: colors.accent,
+                    border: 'none',
+                    color: '#FFF',
                     fontSize: 12,
-                    fontWeight: 600,
+                    fontWeight: 700,
                     cursor: 'pointer',
+                    flexShrink: 0,
                   }}
                 >
                   View

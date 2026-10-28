@@ -297,6 +297,8 @@ export const AppContent: React.FC = () => {
             <HomeScreen
               stats={stats}
               documents={documents}
+              sharedWithMe={sharedWithMe}
+              invitations={invitations}
               notifications={notifications}
               onOpenUpload={() => setIsUploadOpen(true)}
               onOpenScan={() => setIsScanOpen(true)}
@@ -311,6 +313,7 @@ export const AppContent: React.FC = () => {
           {currentTab === 'vault' && (
             <VaultScreen
               documents={documents}
+              sharedWithMe={sharedWithMe}
               selectedCategory={selectedCategory}
               onSelectCategory={cat => setSelectedCategory(cat)}
               onOpenUpload={(isFamily) => {

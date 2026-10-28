@@ -711,8 +711,26 @@ class ApiService {
 
   async getFamilies(): Promise<FamilyGroup[]> {
     try {
-      const res = await this.request<FamilyGroup[]>('/family/');
-      return Array.isArray(res) ? res : [];
+      const res = await this.request<any[]>('/family/');
+      if (!Array.isArray(res)) return [];
+      return res.map(g => ({
+        ...g,
+        id: String(g.id || g._id || ''),
+        name: g.name || 'Family Vault',
+        owner_id: String(g.owner_id || g.ownerId || ''),
+        created_at: g.created_at || g.createdAt || new Date().toISOString(),
+        members: Array.isArray(g.members)
+          ? g.members.map((m: any) => ({
+              ...m,
+              id: String(m.id || m._id || m.userId || m.user_id || ''),
+              user_id: String(m.user_id || m.userId || ''),
+              full_name: m.full_name || m.fullName || m.name || m.email || 'Member',
+              email: m.email || '',
+              role: m.role || 'MEMBER',
+              status: m.status || 'ACTIVE',
+            }))
+          : [],
+      }));
     } catch (e) {
       return [];
     }
@@ -750,7 +768,14 @@ class ApiService {
   async getSharedWithMe(): Promise<DocumentItem[]> {
     try {
       const res = await this.request<DocumentItem[]>('/family/shared-with-me');
-      return Array.isArray(res) ? res : [];
+      return Array.isArray(res)
+        ? res.map(d => ({
+            ...this.normalizeDocument(d),
+            is_family_vault: true,
+            family_vault: true,
+            isFamilyVault: true,
+          }))
+        : [];
     } catch (e) {
       return [];
     }
@@ -759,7 +784,14 @@ class ApiService {
   async getSharedByMe(): Promise<DocumentItem[]> {
     try {
       const res = await this.request<DocumentItem[]>('/family/shared-by-me');
-      return Array.isArray(res) ? res : [];
+      return Array.isArray(res)
+        ? res.map(d => ({
+            ...this.normalizeDocument(d),
+            is_family_vault: true,
+            family_vault: true,
+            isFamilyVault: true,
+          }))
+        : [];
     } catch (e) {
       return [];
     }

@@ -29,9 +29,35 @@ public class FamilyService {
     @Autowired
     private EmailService emailService;
 
+    @Autowired(required = false)
+    private NotificationRepository notificationRepository;
+
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(FamilyService.class);
 
     public List<FamilyGroupDetails> getUserFamilyGroups(User user) {
+        // Auto-link and activate any pending family invitations for this user's email
+        if (user.getEmail() != null && !user.getEmail().trim().isEmpty()) {
+            try {
+                List<FamilyInvitation> pending = familyInvitationRepository.findByInviteeEmail(user.getEmail().trim().toLowerCase());
+                for (FamilyInvitation inv : pending) {
+                    if ("PENDING".equalsIgnoreCase(inv.getStatus())) {
+                        inv.setStatus("ACCEPTED");
+                        familyInvitationRepository.save(inv);
+                    }
+                    if (inv.getFamilyGroupId() != null) {
+                        Optional<FamilyMember> existingM = familyMemberRepository.findByFamilyGroupIdAndUserId(inv.getFamilyGroupId(), user.getId());
+                        if (!existingM.isPresent()) {
+                            FamilyMember m = new FamilyMember(inv.getFamilyGroupId(), user.getId(), "MEMBER");
+                            m.setStatus("ACTIVE");
+                            familyMemberRepository.save(m);
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                logger.warn("Could not auto-link family invitations: {}", ex.getMessage());
+            }
+        }
+
         List<FamilyMember> memberships = familyMemberRepository.findByUserId(user.getId());
         List<FamilyGroupDetails> results = new ArrayList<>();
         Set<String> seenGroupIds = new HashSet<>();
@@ -133,8 +159,8 @@ public class FamilyService {
 
     public FamilyInvitation inviteMember(User user, String inviteeEmail) {
         FamilyGroupDetails details = getOrCreateFamilyGroup(user);
+        String cleanEmail = inviteeEmail.trim().toLowerCase();
 
-        // Check if already invited or member
         String token = UUID.randomUUID().toString();
         Calendar cal = Calendar.getInstance();
         cal.add(Calendar.DAY_OF_YEAR, 7); // 7 days expiration
@@ -142,15 +168,46 @@ public class FamilyService {
         FamilyInvitation invitation = new FamilyInvitation(
                 details.getId(),
                 user.getId(),
-                inviteeEmail.trim().toLowerCase(),
+                cleanEmail,
                 token,
                 cal.getTime()
         );
+
+        // If invitee is already a registered user, immediately add them to the family group!
+        Optional<User> existingUserOpt = userRepository.findByEmail(cleanEmail);
+        if (existingUserOpt.isPresent()) {
+            User existingUser = existingUserOpt.get();
+            invitation.setStatus("ACCEPTED");
+
+            Optional<FamilyMember> existingMember = familyMemberRepository.findByFamilyGroupIdAndUserId(
+                    details.getId(), existingUser.getId());
+            if (!existingMember.isPresent()) {
+                FamilyMember member = new FamilyMember(details.getId(), existingUser.getId(), "MEMBER");
+                member.setStatus("ACTIVE");
+                familyMemberRepository.save(member);
+            }
+
+            if (notificationRepository != null) {
+                try {
+                    Notification notif = new Notification(
+                            existingUser.getId(),
+                            "Added to Family Vault",
+                            user.getFullName() + " added you to the \"" + details.getName() + "\" Family Vault. You can now view and share family documents.",
+                            "FAMILY_INVITE",
+                            null
+                    );
+                    notificationRepository.save(notif);
+                } catch (Exception ex) {
+                    logger.warn("Could not save in-app family notification: {}", ex.getMessage());
+                }
+            }
+        }
+
         FamilyInvitation saved = familyInvitationRepository.save(invitation);
         CompletableFuture.runAsync(() -> {
             try {
                 emailService.sendFamilyInvitationEmail(
-                        inviteeEmail.trim().toLowerCase(),
+                        cleanEmail,
                         user.getFullName(),
                         details.getName(),
                         token,

@@ -3,13 +3,15 @@ import {
   FileText, QrCode, UploadCloud, Users, ShieldAlert, 
   AlertTriangle, ArrowRight, ShieldCheck, Clock, Plus, Sparkles, FolderLock 
 } from 'lucide-react';
-import { DocumentItem, DashboardStats, NotificationItem } from '../types';
+import { DocumentItem, DashboardStats, NotificationItem, FamilyInvitation } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
 interface HomeScreenProps {
   stats: DashboardStats | null;
   documents: DocumentItem[];
+  sharedWithMe?: DocumentItem[];
+  invitations?: FamilyInvitation[];
   notifications: NotificationItem[];
   onOpenUpload: () => void;
   onOpenScan: () => void;
@@ -34,6 +36,8 @@ const CATEGORIES = [
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   stats,
   documents,
+  sharedWithMe = [],
+  invitations = [],
   notifications,
   onOpenUpload,
   onOpenScan,
@@ -135,6 +139,60 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Pending Family Invitations Banner on Home Screen */}
+      {invitations.length > 0 && (
+        <div style={{
+          padding: 16,
+          borderRadius: 16,
+          backgroundColor: 'rgba(59, 130, 246, 0.14)',
+          border: '1px solid rgba(59, 130, 246, 0.35)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
+            <div style={{
+              width: 40,
+              height: 40,
+              borderRadius: 10,
+              backgroundColor: '#3B82F6',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#FFF',
+              flexShrink: 0,
+            }}>
+              <Users size={20} />
+            </div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>
+                Family Vault Invitation Received
+              </div>
+              <div style={{ fontSize: 11, color: colors.textMuted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {invitations[0].inviter_name || 'A family member'} invited you to "{invitations[0].family_name || 'Family Vault'}"
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => onNavigateTab('family')}
+            style={{
+              padding: '8px 14px',
+              borderRadius: 8,
+              backgroundColor: '#3B82F6',
+              color: '#FFF',
+              border: 'none',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            Review & Join
+          </button>
+        </div>
+      )}
 
       {/* DocuVault 2.0 Personal Document Assistant Dashboard */}
       {onOpenAssistant && (
