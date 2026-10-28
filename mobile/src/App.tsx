@@ -372,6 +372,7 @@ export const AppContent: React.FC = () => {
               sharedByMe={sharedByMe}
               emergencyContacts={emergencyContacts}
               medicalInfo={medicalInfo}
+              documents={documents}
               onRefresh={handleRefreshAll}
               onOpenInvite={fId => setInviteFamilyId(fId)}
               onOpenDocument={doc => setSelectedDocForDetails(doc)}

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { 
   Users, UserPlus, ShieldAlert, HeartPulse, FileText, 
-  Check, X, Trash2, Plus, ShieldCheck, Phone, Mail, ArrowRight, Eye, AlertTriangle, KeyRound 
+  Check, X, Trash2, Plus, ShieldCheck, Phone, Mail, ArrowRight, Eye, AlertTriangle, KeyRound,
+  Lock, Unlock, FolderLock, User as UserIcon, UserCheck, RefreshCw, Filter, Download
 } from 'lucide-react';
 import { FamilyGroup, FamilyInvitation, DocumentItem, EmergencyContact, EmergencyMedicalInfo } from '../types';
 import { api } from '../services/api';
@@ -16,6 +17,7 @@ interface FamilyScreenProps {
   sharedByMe: DocumentItem[];
   emergencyContacts: EmergencyContact[];
   medicalInfo: EmergencyMedicalInfo | null;
+  documents?: DocumentItem[];
   onRefresh: () => void;
   onOpenInvite: (familyId: string) => void;
   onOpenDocument: (doc: DocumentItem) => void;
@@ -29,6 +31,7 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
   sharedByMe,
   emergencyContacts,
   medicalInfo,
+  documents = [],
   onRefresh,
   onOpenInvite,
   onOpenDocument,
@@ -36,7 +39,9 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
 }) => {
   const { colors } = useTheme();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'members' | 'shared_with_me' | 'shared_by_me' | 'emergency'>('members');
+  const [activeTab, setActiveTab] = useState<'members' | 'shared_vault' | 'emergency'>('members');
+  const [docsFilter, setDocsFilter] = useState<'all' | 'others' | 'mine'>('all');
+  const [processingDocId, setProcessingDocId] = useState<string | null>(null);
 
   // Create Family state
     // Manual Token Input state
@@ -81,12 +86,145 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
     return families[0];
   }, [families, selectedFamilyId, user?.id]);
 
-  const familySharedDocs = React.useMemo(() => {
-    if (sharedWithMe && sharedWithMe.length > 0) return sharedWithMe;
-    const groupDocs = primaryFamily?.documents || [];
-    const othersDocs = groupDocs.filter((d: any) => d.user_id !== user?.id && (d as any).userId !== user?.id);
-    return othersDocs.length > 0 ? othersDocs : groupDocs;
-  }, [sharedWithMe, primaryFamily?.documents, user?.id]);
+  // Unified list of all shared documents in this family group
+  const allVaultDocuments = React.useMemo(() => {
+    const map = new Map<string, DocumentItem>();
+
+    // 1. Documents shared by other members with current user
+    (sharedWithMe || []).forEach(doc => {
+      if (doc && doc.id) {
+        map.set(doc.id, doc);
+      }
+    });
+
+    // 2. Documents shared by current user into family vault
+    (sharedByMe || []).forEach(doc => {
+      if (doc && doc.id) {
+        map.set(doc.id, doc);
+      }
+    });
+
+    // 3. User's own family vault documents
+    (documents || []).forEach(doc => {
+      if (doc && doc.id && (doc.is_family_vault || (doc as any).isFamilyVault || (doc as any).family_vault)) {
+        map.set(doc.id, doc);
+      }
+    });
+
+    // 4. Primary family group documents if populated
+    (primaryFamily?.documents || []).forEach((doc: any) => {
+      if (doc && doc.id && !map.has(doc.id)) {
+        map.set(doc.id, doc);
+      }
+    });
+
+    return Array.from(map.values());
+  }, [sharedWithMe, sharedByMe, documents, primaryFamily?.documents]);
+
+  const isSender = (doc: DocumentItem): boolean => {
+    const docUserId = (doc as any).userId || (doc as any).user_id || (doc as any).ownerId || (doc as any).owner_id;
+    return Boolean(docUserId && user?.id && docUserId === user.id);
+  };
+
+  const isFamilyAdmin = React.useMemo(() => {
+    if (!primaryFamily || !user) return false;
+    const isOwner = primaryFamily.owner_id === user.id || (primaryFamily as any).ownerId === user.id;
+    if (isOwner) return true;
+    const member = (primaryFamily.members || []).find((m: any) => {
+      const mUid = m.userId || m.user_id || m.id;
+      const mEmail = m.email || (m as any).user_email;
+      return mUid === user.id || (mEmail && user.email && mEmail.toLowerCase() === user.email.toLowerCase());
+    });
+    return member?.role === 'ADMIN' || member?.role === 'OWNER';
+  }, [primaryFamily, user]);
+
+  const canDeleteOrManage = (doc: DocumentItem): boolean => {
+    return isSender(doc) || isFamilyAdmin;
+  };
+
+  const getSenderName = (doc: DocumentItem): string => {
+    if (isSender(doc)) {
+      return 'You';
+    }
+    const docUserId = (doc as any).userId || (doc as any).user_id;
+    if (primaryFamily?.members && docUserId) {
+      const match = primaryFamily.members.find((m: any) => {
+        const mUid = m.userId || m.user_id || m.id;
+        return mUid === docUserId;
+      });
+      if (match) {
+        const name = (match as any).fullName || (match as any).full_name || (match as any).user_name || match.email;
+        if (name) return name;
+      }
+    }
+    if (doc.issuer && doc.issuer.startsWith('Shared by ')) {
+      return doc.issuer.replace('Shared by ', '');
+    }
+    if (doc.holder_name && doc.holder_name !== user?.full_name) {
+      return doc.holder_name;
+    }
+    if (doc.issuer && doc.issuer !== 'Personal' && doc.issuer !== 'Personal Record') {
+      return doc.issuer;
+    }
+    return 'Group Member';
+  };
+
+  const filteredVaultDocs = React.useMemo(() => {
+    if (docsFilter === 'others') {
+      return allVaultDocuments.filter(d => !isSender(d));
+    }
+    if (docsFilter === 'mine') {
+      return allVaultDocuments.filter(d => isSender(d));
+    }
+    return allVaultDocuments;
+  }, [allVaultDocuments, docsFilter, user?.id]);
+
+  const handleMakePersonal = async (e: React.MouseEvent, doc: DocumentItem) => {
+    e.stopPropagation();
+    const docTitle = doc.title || 'Document';
+    if (!window.confirm(`Make "${docTitle}" personal?\n\nThis will remove the document from the Family Vault. Only you will have access to it in your Personal Locker.`)) {
+      return;
+    }
+    setProcessingDocId(doc.id);
+    try {
+      await api.updateDocument(doc.id, { 
+        is_family_vault: false, 
+        isFamilyVault: false,
+        family_vault: false 
+      });
+      showLocalNotification('Removed from Family Vault', `"${docTitle}" moved to Personal Locker.`);
+      alert(`"${docTitle}" has been made personal and removed from the Family Vault.`);
+      onRefresh();
+    } catch (err: any) {
+      alert(err.message || 'Failed to remove document from Family Vault');
+    } finally {
+      setProcessingDocId(null);
+    }
+  };
+
+  const handleDeleteSharedDoc = async (e: React.MouseEvent, doc: DocumentItem) => {
+    e.stopPropagation();
+    const docTitle = doc.title || 'Document';
+    const sender = isSender(doc);
+    const confirmMessage = sender
+      ? `Delete "${docTitle}"?\n\nAs the sender, this will permanently delete this document from both your personal locker and the Family Vault. This action cannot be undone.`
+      : `Delete "${docTitle}" as Family Admin?\n\nThis will permanently remove this shared document from the Family Vault. This action cannot be undone.`;
+
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+    setProcessingDocId(doc.id);
+    try {
+      await api.deleteDocument(doc.id);
+      showLocalNotification('Document Deleted', `"${docTitle}" deleted from vault.`);
+      alert(`"${docTitle}" has been deleted.`);
+      onRefresh();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete document');
+    } finally {
+      setProcessingDocId(null);
+    }
+  };
 
     // Auto-accept invitation from email deep link if token is present
   React.useEffect(() => {
@@ -275,30 +413,37 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
         gap: 4,
       }}>
         {[
-          { id: 'members', label: 'Members' },
-          { id: 'shared_with_me', label: `Shared (${familySharedDocs.length})` },
-          { id: 'shared_by_me', label: 'My Shares' },
-          { id: 'emergency', label: 'Emergency' },
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            style={{
-              flex: 1,
-              padding: '8px 4px',
-              borderRadius: 8,
-              border: 'none',
-              backgroundColor: activeTab === tab.id ? colors.accent : 'transparent',
-              color: activeTab === tab.id ? '#FFF' : colors.textMuted,
-              fontSize: 12,
-              fontWeight: activeTab === tab.id ? 700 : 500,
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
+          { id: 'members', label: 'Members', icon: Users },
+          { id: 'shared_vault', label: `Shared Vault (${allVaultDocuments.length})`, icon: FolderLock },
+          { id: 'emergency', label: 'Emergency', icon: ShieldAlert },
+        ].map(tab => {
+          const isSelected = activeTab === tab.id || (tab.id === 'shared_vault' && ((activeTab as any) === 'shared_with_me' || (activeTab as any) === 'shared_by_me'));
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              style={{
+                flex: 1,
+                padding: '9px 4px',
+                borderRadius: 8,
+                border: 'none',
+                backgroundColor: isSelected ? colors.accent : 'transparent',
+                color: isSelected ? '#FFF' : colors.textMuted,
+                fontSize: 12,
+                fontWeight: isSelected ? 700 : 500,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 5,
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <tab.icon size={13} />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Tab: Members */}
@@ -466,34 +611,44 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
               </div>
 
               {/* Shared Documents Quick Access Strip */}
-              {familySharedDocs.length > 0 && (
-                <div
-                  onClick={() => setActiveTab('shared_with_me')}
-                  style={{
-                    padding: '12px 14px',
-                    borderRadius: 12,
-                    backgroundColor: 'rgba(59, 130, 246, 0.12)',
-                    border: '1px solid rgba(59, 130, 246, 0.3)',
-                    cursor: 'pointer',
+              <div
+                onClick={() => setActiveTab('shared_vault')}
+                style={{
+                  padding: '13px 15px',
+                  borderRadius: 14,
+                  backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                  border: '1px solid rgba(59, 130, 246, 0.3)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+                  <div style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: 'rgba(59, 130, 246, 0.2)',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <FileText size={18} color="#3B82F6" />
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>
-                        {familySharedDocs.length} Document{familySharedDocs.length > 1 ? 's' : ''} Available in this Vault
-                      </div>
-                      <div style={{ fontSize: 11, color: colors.textMuted }}>
-                        Tap to view documents shared by family members
-                      </div>
+                    justifyContent: 'center',
+                    color: '#3B82F6',
+                    flexShrink: 0,
+                  }}>
+                    <FileText size={18} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>
+                      {allVaultDocuments.length} Document{allVaultDocuments.length === 1 ? '' : 's'} Available in this Vault
+                    </div>
+                    <div style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
+                      Tap to view all documents shared by family members
                     </div>
                   </div>
-                  <ArrowRight size={16} color="#3B82F6" />
                 </div>
-              )}
+                <ArrowRight size={16} color="#3B82F6" />
+              </div>
 
               {/* Members List */}
               <div style={{ fontSize: 13, fontWeight: 700, color: colors.textMuted, marginTop: 4 }}>
@@ -664,140 +819,360 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
         </div>
       )}
 
-      {/* Tab: Shared with Me */}
-      {activeTab === 'shared_with_me' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {familySharedDocs.length > 0 ? (
-            familySharedDocs.map(doc => (
-              <div
-                key={doc.id}
-                onClick={() => onOpenDocument(doc)}
-                style={{
-                  padding: 16,
-                  borderRadius: 14,
-                  backgroundColor: colors.surfaceCard,
-                  border: `1px solid ${colors.surfaceBorder}`,
-                  cursor: 'pointer',
+      {/* Tab: Shared Vault (All shared documents from group members) */}
+      {(activeTab === 'shared_vault' || (activeTab as any) === 'shared_with_me' || (activeTab as any) === 'shared_by_me') && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Header Info & Sub-filters */}
+          <div style={{
+            padding: 16,
+            borderRadius: 16,
+            backgroundColor: colors.surfaceCard,
+            border: `1px solid ${colors.surfaceBorder}`,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 10,
+                  backgroundColor: 'rgba(13, 148, 136, 0.15)',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 12,
+                  justifyContent: 'center',
+                  color: colors.accentLight,
+                }}>
+                  <FolderLock size={20} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: colors.text }}>
+                    Group Shared Documents
+                  </div>
+                  <div style={{ fontSize: 11, color: colors.textMuted }}>
+                    {primaryFamily?.name ? `${primaryFamily.name} • ` : ''}
+                    {allVaultDocuments.length} document{allVaultDocuments.length === 1 ? '' : 's'} shared in total
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={onRefresh}
+                title="Refresh shared documents"
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 8,
+                  backgroundColor: colors.surface,
+                  border: `1px solid ${colors.surfaceBorder}`,
+                  color: colors.textMuted,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
-                  <div style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 10,
-                    backgroundColor: 'rgba(59, 130, 246, 0.15)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                    color: '#3B82F6',
-                  }}>
-                    <FileText size={20} />
-                  </div>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{
-                      fontSize: 14,
-                      fontWeight: 700,
-                      color: colors.text,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}>
-                      {doc.title}
-                    </div>
-                    <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <span>{doc.category || 'General'}</span>
-                      <span>•</span>
-                      <span style={{ color: colors.accentLight, fontWeight: 600 }}>
-                        {doc.issuer || (doc.holder_name ? `Shared by ${doc.holder_name}` : 'Family Member')}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                      <span style={{
-                        padding: '1px 6px',
-                        borderRadius: 4,
-                        fontSize: 10,
-                        fontWeight: 700,
-                        backgroundColor: 'rgba(59, 130, 246, 0.12)',
-                        color: '#3B82F6',
+                <RefreshCw size={14} />
+              </button>
+            </div>
+
+            {/* Permission notice banner */}
+            <div style={{
+              padding: '8px 12px',
+              borderRadius: 8,
+              backgroundColor: 'rgba(59, 130, 246, 0.08)',
+              border: '1px solid rgba(59, 130, 246, 0.2)',
+              fontSize: 11,
+              color: colors.textMuted,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}>
+              <ShieldCheck size={14} color="#3B82F6" style={{ flexShrink: 0 }} />
+              <span>
+                {isFamilyAdmin 
+                  ? 'As Family Admin, you have authority to view, unshare, or delete shared documents in this vault.'
+                  : 'Only the document sender and the Family Admin have permission to delete or remove shared documents.'}
+              </span>
+            </div>
+
+            {/* Filter Pills */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {[
+                { id: 'all', label: `All (${allVaultDocuments.length})` },
+                { id: 'others', label: `From Members (${allVaultDocuments.filter(d => !isSender(d)).length})` },
+                { id: 'mine', label: `Uploaded by Me (${allVaultDocuments.filter(d => isSender(d)).length})` },
+              ].map(f => {
+                const isActive = docsFilter === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    onClick={() => setDocsFilter(f.id as any)}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: 16,
+                      border: `1px solid ${isActive ? colors.accent : colors.surfaceBorder}`,
+                      backgroundColor: isActive ? 'rgba(13, 148, 136, 0.15)' : colors.surface,
+                      color: isActive ? colors.accentLight : colors.textMuted,
+                      fontSize: 11,
+                      fontWeight: isActive ? 700 : 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {f.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Documents List */}
+          {filteredVaultDocs.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {filteredVaultDocs.map(doc => {
+                const sender = isSender(doc);
+                const senderName = getSenderName(doc);
+                const canManage = canDeleteOrManage(doc);
+                const isProcessing = processingDocId === doc.id;
+
+                return (
+                  <div
+                    key={doc.id}
+                    onClick={() => onOpenDocument(doc)}
+                    style={{
+                      padding: 16,
+                      borderRadius: 16,
+                      backgroundColor: colors.surfaceCard,
+                      border: `1px solid ${colors.surfaceBorder}`,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 12,
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {/* Top Row: Icon + Title + Sender badge */}
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                      <div style={{
+                        width: 42,
+                        height: 42,
+                        borderRadius: 12,
+                        backgroundColor: sender ? 'rgba(13, 148, 136, 0.15)' : 'rgba(59, 130, 246, 0.15)',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 3,
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        color: sender ? colors.accentLight : '#3B82F6',
+                        marginTop: 2,
                       }}>
-                        <Users size={10} />
-                        <span>Family Locker</span>
-                      </span>
+                        <FileText size={20} />
+                      </div>
+
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{
+                          fontSize: 15,
+                          fontWeight: 700,
+                          color: colors.text,
+                          lineHeight: 1.3,
+                          wordBreak: 'break-word',
+                        }}>
+                          {doc.title}
+                        </div>
+
+                        {/* Metadata row */}
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          flexWrap: 'wrap',
+                          marginTop: 6,
+                        }}>
+                          {/* Sender badge */}
+                          <span style={{
+                            padding: '2px 8px',
+                            borderRadius: 6,
+                            fontSize: 10,
+                            fontWeight: 700,
+                            backgroundColor: sender ? 'rgba(13, 148, 136, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                            color: sender ? colors.accentLight : '#3B82F6',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}>
+                            {sender ? <UserCheck size={11} /> : <Users size={11} />}
+                            <span>{sender ? 'Uploaded by You' : `Shared by ${senderName}`}</span>
+                          </span>
+
+                          {/* Category badge */}
+                          <span style={{
+                            padding: '2px 7px',
+                            borderRadius: 6,
+                            fontSize: 10,
+                            fontWeight: 600,
+                            backgroundColor: colors.surface,
+                            color: colors.textMuted,
+                            border: `1px solid ${colors.surfaceBorder}`,
+                          }}>
+                            {doc.category || 'General'}
+                          </span>
+
+                          {/* File format */}
+                          {doc.file_format && (
+                            <span style={{
+                              padding: '2px 7px',
+                              borderRadius: 6,
+                              fontSize: 10,
+                              fontWeight: 600,
+                              backgroundColor: colors.surface,
+                              color: colors.textMuted,
+                              textTransform: 'uppercase',
+                              border: `1px solid ${colors.surfaceBorder}`,
+                            }}>
+                              {doc.file_format}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Divider */}
+                    <div style={{ height: 1, backgroundColor: colors.surfaceBorder, width: '100%' }} />
+
+                    {/* Bottom Action Bar */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: 8,
+                    }}>
+                      {/* Permission status tag */}
+                      <div style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {canManage ? (
+                          <span style={{ color: colors.accentLight, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <ShieldCheck size={13} />
+                            <span>{sender ? 'Sender' : 'Admin'} permissions</span>
+                          </span>
+                        ) : (
+                          <span style={{ color: colors.textMuted, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Lock size={12} />
+                            <span>View-only member access</span>
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Action buttons */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                        {/* View Button (Available to all) */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenDocument(doc);
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            padding: '6px 12px',
+                            borderRadius: 8,
+                            backgroundColor: colors.accent,
+                            border: 'none',
+                            color: '#FFF',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <Eye size={13} />
+                          <span>View</span>
+                        </button>
+
+                        {/* Make Personal / Remove from Vault (Sender & Admin only) */}
+                        {canManage && (
+                          <button
+                            disabled={isProcessing}
+                            title={sender ? "Make Personal (Remove from Family Vault)" : "Remove from Family Vault"}
+                            onClick={(e) => handleMakePersonal(e, doc)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 5,
+                              padding: '6px 10px',
+                              borderRadius: 8,
+                              backgroundColor: colors.surface,
+                              border: `1px solid ${colors.surfaceBorder}`,
+                              color: colors.text,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              cursor: isProcessing ? 'wait' : 'pointer',
+                              opacity: isProcessing ? 0.6 : 1,
+                            }}
+                          >
+                            <Lock size={12} color={colors.accentLight} />
+                            <span>{sender ? 'Make Personal' : 'Unshare'}</span>
+                          </button>
+                        )}
+
+                        {/* Delete Button (Sender & Admin only) */}
+                        {canManage && (
+                          <button
+                            disabled={isProcessing}
+                            title="Delete Document"
+                            onClick={(e) => handleDeleteSharedDoc(e, doc)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              padding: '6px 10px',
+                              borderRadius: 8,
+                              backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                              border: '1px solid rgba(239, 68, 68, 0.25)',
+                              color: '#EF4444',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              cursor: isProcessing ? 'wait' : 'pointer',
+                              opacity: isProcessing ? 0.6 : 1,
+                            }}
+                          >
+                            <Trash2 size={12} />
+                            <span>Delete</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenDocument(doc);
-                  }}
-                  style={{
-                    padding: '8px 14px',
-                    borderRadius: 8,
-                    backgroundColor: colors.accent,
-                    border: 'none',
-                    color: '#FFF',
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    flexShrink: 0,
-                  }}
-                >
-                  View
-                </button>
-              </div>
-            ))
-          ) : (
-            <div style={{ textAlign: 'center', padding: 36, color: colors.textMuted, fontSize: 13 }}>
-              No documents have been shared with you yet.
+                );
+              })}
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Tab: Shared by Me */}
-      {activeTab === 'shared_by_me' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {sharedByMe.length > 0 ? (
-            sharedByMe.map(doc => (
-              <div
-                key={doc.id}
-                onClick={() => onOpenDocument(doc)}
-                style={{
-                  padding: 14,
-                  borderRadius: 12,
-                  backgroundColor: colors.surfaceCard,
-                  border: `1px solid ${colors.surfaceBorder}`,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: colors.text }}>
-                    {doc.title}
-                  </div>
-                  <div style={{ fontSize: 12, color: colors.textMuted }}>
-                    {doc.permissions?.length || 1} family member(s) have access
-                  </div>
-                </div>
-                <span style={{ fontSize: 12, color: colors.accentLight, fontWeight: 600 }}>
-                  Manage
-                </span>
-              </div>
-            ))
           ) : (
-            <div style={{ textAlign: 'center', padding: 36, color: colors.textMuted, fontSize: 13 }}>
-              You haven't shared any documents with family members yet. Open any document to grant access.
+            /* Empty State */
+            <div style={{
+              padding: 40,
+              borderRadius: 16,
+              backgroundColor: colors.surfaceCard,
+              border: `1px solid ${colors.surfaceBorder}`,
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 8,
+            }}>
+              <FolderLock size={44} color={colors.accentLight} style={{ opacity: 0.8, marginBottom: 4 }} />
+              <div style={{ fontSize: 16, fontWeight: 700, color: colors.text }}>
+                {docsFilter === 'all' 
+                  ? 'No Documents in Family Vault Yet' 
+                  : docsFilter === 'mine' 
+                    ? 'You Haven\'t Shared Any Documents Yet'
+                    : 'No Documents From Other Members Yet'}
+              </div>
+              <p style={{ fontSize: 12, color: colors.textMuted, maxWidth: 320, lineHeight: 1.5 }}>
+                {docsFilter === 'all'
+                  ? 'Any group member can share documents into this Family Locker from their Personal Locker using the toggle switch.'
+                  : docsFilter === 'mine'
+                    ? 'Go to "My Vault" and toggle the Family Locker switch on any document to share it with your family.'
+                    : 'When other members in your family group share their documents, they will appear here.'}
+              </p>
             </div>
           )}
         </div>

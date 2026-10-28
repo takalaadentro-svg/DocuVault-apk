@@ -265,6 +265,27 @@ public class DocumentService {
 
     public DocumentResponse updateDocument(User user, String id, DocumentUpdateRequest req) {
         DocumentRecord doc = findAndAuthorize(user, id);
+        boolean isOwner = doc.getUserId() != null && doc.getUserId().equals(user.getId());
+        boolean isFamilyAdmin = false;
+        if (!isOwner && doc.isFamilyVault() && familyService != null && doc.getUserId() != null) {
+            isFamilyAdmin = familyService.isUserAdminOfFamilyGroupWith(user.getId(), doc.getUserId());
+        }
+
+        if (!isOwner && !isFamilyAdmin) {
+            throw new RuntimeException("Access Denied: Only the document sender or Family Admin can update or remove this document.");
+        }
+
+        // If Family Admin is updating someone else's document, allow removing from Family Vault (make it personal)
+        if (!isOwner && isFamilyAdmin) {
+            Boolean famVal = req.getFamilyVault() != null ? req.getFamilyVault() : req.getIsFamilyVault();
+            if (Boolean.FALSE.equals(famVal)) {
+                doc.setFamilyVault(false);
+                doc.setIsFamilyVault(false);
+                doc.setUpdatedAt(new Date());
+                return toResponse(documentRepository.save(doc));
+            }
+            throw new RuntimeException("Family Admin can only remove shared documents from Family Vault.");
+        }
 
         // Preserve current version before applying update
         int nextVersion = doc.getVersion() + 1;
@@ -316,6 +337,16 @@ public class DocumentService {
 
     public void deleteDocument(User user, String id) {
         DocumentRecord doc = findAndAuthorize(user, id);
+        boolean isOwner = doc.getUserId() != null && doc.getUserId().equals(user.getId());
+        boolean isFamilyAdmin = false;
+        if (!isOwner && doc.isFamilyVault() && familyService != null && doc.getUserId() != null) {
+            isFamilyAdmin = familyService.isUserAdminOfFamilyGroupWith(user.getId(), doc.getUserId());
+        }
+
+        if (!isOwner && !isFamilyAdmin) {
+            throw new RuntimeException("Access Denied: Only the document sender or Family Admin has permission to delete this document.");
+        }
+
         storageService.deleteFile(doc.getStoredFilename());
         documentRepository.delete(doc);
         versionRepository.deleteByDocumentId(id);

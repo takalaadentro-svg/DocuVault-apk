@@ -165,6 +165,31 @@ public class FamilyService {
         return getFamilyMemberUserIds(userId1).contains(userId2);
     }
 
+    public boolean isUserAdminOfFamilyGroupWith(String currentUserId, String targetUserId) {
+        if (currentUserId == null || targetUserId == null) return false;
+        if (currentUserId.equals(targetUserId)) return true;
+
+        List<FamilyGroup> ownedGroups = familyGroupRepository.findByOwnerId(currentUserId);
+        for (FamilyGroup g : ownedGroups) {
+            if (g.getId() != null) {
+                if (targetUserId.equals(g.getOwnerId())) return true;
+                Optional<FamilyMember> m = familyMemberRepository.findByFamilyGroupIdAndUserId(g.getId(), targetUserId);
+                if (m.isPresent()) return true;
+            }
+        }
+
+        List<FamilyMember> adminMemberships = familyMemberRepository.findByUserId(currentUserId);
+        for (FamilyMember am : adminMemberships) {
+            if ("ADMIN".equalsIgnoreCase(am.getRole()) && am.getFamilyGroupId() != null) {
+                Optional<FamilyMember> targetM = familyMemberRepository.findByFamilyGroupIdAndUserId(am.getFamilyGroupId(), targetUserId);
+                if (targetM.isPresent()) return true;
+                Optional<FamilyGroup> grp = familyGroupRepository.findById(am.getFamilyGroupId());
+                if (grp.isPresent() && targetUserId.equals(grp.get().getOwnerId())) return true;
+            }
+        }
+        return false;
+    }
+
     public FamilyInvitation inviteMember(User user, String inviteeEmail) {
         FamilyGroupDetails details = getOrCreateFamilyGroup(user);
         String cleanEmail = inviteeEmail.trim().toLowerCase();
