@@ -48,11 +48,14 @@ public class FamilyController {
     @PostMapping
     public ResponseEntity<?> createFamilyGroup(
             @AuthenticationPrincipal User user,
-            @RequestBody CreateGroupRequest req) {
+            @RequestBody(required = false) CreateGroupRequest req) {
         if (user == null) {
             return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
         }
-        return ResponseEntity.ok(familyService.getOrCreateFamilyGroup(user));
+        String name = (req != null && req.getName() != null && !req.getName().trim().isEmpty())
+                ? req.getName().trim()
+                : user.getFullName() + "'s Family Vault";
+        return ResponseEntity.ok(familyService.createFamilyGroup(user, name));
     }
 
     @PostMapping({"/{familyId}/invite", "/invite"})
@@ -63,9 +66,10 @@ public class FamilyController {
         if (user == null) {
             return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
         }
-        String email = body.getOrDefault("invitee_email", body.get("email"));
+        String email = body != null ? body.getOrDefault("invitee_email", body.get("email")) : null;
+        String role = body != null ? body.getOrDefault("role", "MEMBER") : "MEMBER";
         try {
-            FamilyInvitation inv = familyService.inviteMember(user, email);
+            FamilyInvitation inv = familyService.inviteMember(user, familyId, email, role);
             return ResponseEntity.ok(inv);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Collections.singletonMap("detail", e.getMessage()));
@@ -112,15 +116,46 @@ public class FamilyController {
         }
     }
 
-    @DeleteMapping("/members/{memberUserId}")
+    @PostMapping("/{familyId}/leave")
+    public ResponseEntity<?> leaveFamilyGroup(
+            @AuthenticationPrincipal User user,
+            @PathVariable("familyId") String familyId) {
+        if (user == null) {
+            return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
+        }
+        try {
+            familyService.leaveFamilyGroup(user, familyId);
+            return ResponseEntity.ok(Collections.singletonMap("message", "Left family vault successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Collections.singletonMap("detail", e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/{familyId}")
+    public ResponseEntity<?> deleteFamilyGroup(
+            @AuthenticationPrincipal User user,
+            @PathVariable("familyId") String familyId) {
+        if (user == null) {
+            return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
+        }
+        try {
+            familyService.deleteFamilyGroup(user, familyId);
+            return ResponseEntity.ok(Collections.singletonMap("message", "Family vault deleted successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Collections.singletonMap("detail", e.getMessage()));
+        }
+    }
+
+    @DeleteMapping({"/{familyId}/members/{memberUserId}", "/members/{memberUserId}"})
     public ResponseEntity<?> removeMember(
             @AuthenticationPrincipal User user,
+            @PathVariable(value = "familyId", required = false) String familyId,
             @PathVariable("memberUserId") String memberUserId) {
         if (user == null) {
             return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
         }
         try {
-            familyService.removeMember(user, memberUserId);
+            familyService.removeMember(user, familyId, memberUserId);
             return ResponseEntity.ok(Collections.singletonMap("message", "Member removed successfully"));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Collections.singletonMap("detail", e.getMessage()));

@@ -296,8 +296,15 @@ class ApiService {
       } catch (err) {}
     }
 
+    const uid = String(d.user_id || d.userId || d.owner_id || d.ownerId || '');
+
     return {
       ...d,
+      user_id: uid,
+      userId: uid,
+      holder_name: d.holder_name || d.holderName || '',
+      doc_number: d.doc_number || d.docNumber || '',
+      file_format: d.file_format || d.fileFormat || (d.mimeType ? d.mimeType.split('/')[1] : ''),
       is_family_vault: isFam,
       family_vault: isFam,
       isFamilyVault: isFam,
@@ -767,8 +774,21 @@ class ApiService {
     });
   }
 
-  async removeFamilyMember(memberId: string) {
-    return this.request<{ message: string }>(`/family/members/${memberId}`, {
+  async leaveFamily(familyId: string) {
+    return this.request<{ message: string }>(`/family/${familyId}/leave`, {
+      method: 'POST'
+    });
+  }
+
+  async deleteFamily(familyId: string) {
+    return this.request<{ message: string }>(`/family/${familyId}`, {
+      method: 'DELETE'
+    });
+  }
+
+  async removeFamilyMember(memberId: string, familyId?: string) {
+    const endpoint = familyId ? `/family/${familyId}/members/${memberId}` : `/family/members/${memberId}`;
+    return this.request<{ message: string }>(endpoint, {
       method: 'DELETE'
     });
   }

@@ -12,4 +12,5 @@ public interface FamilyInvitationRepository extends MongoRepository<FamilyInvita
     Optional<FamilyInvitation> findByToken(String token);
     List<FamilyInvitation> findByInviteeEmail(String inviteeEmail);
     List<FamilyInvitation> findByFamilyGroupId(String familyGroupId);
+    void deleteByFamilyGroupId(String familyGroupId);
 }

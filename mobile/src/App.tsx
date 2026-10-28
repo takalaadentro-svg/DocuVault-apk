@@ -120,61 +120,66 @@ export const AppContent: React.FC = () => {
     queryKey: ['families'],
     queryFn: () => api.getFamilies(),
     enabled: isAuthenticated,
+    refetchInterval: 12000,
   });
 
   const { data: invitations = [], refetch: refetchInvites } = useQuery<FamilyInvitation[]>({
     queryKey: ['invitations'],
     queryFn: () => api.getPendingInvitations(),
     enabled: isAuthenticated,
+    refetchInterval: 12000,
   });
 
   const { data: sharedWithMe = [], refetch: refetchSharedWithMe } = useQuery<DocumentItem[]>({
-    queryKey: ['shared_with_me', families],
+    queryKey: ['shared_with_me'],
     queryFn: async () => {
       const fromApi = await api.getSharedWithMe();
-      const fromFamilies = (families || []).flatMap(f => (f as any).documents || []);
       const mergedMap = new Map<string, DocumentItem>();
       (fromApi || []).forEach(d => {
         if (d && d.id) mergedMap.set(d.id, d);
       });
-      (fromFamilies || []).forEach(d => {
-        if (d && d.id && d.user_id !== user?.id && (d as any).userId !== user?.id && !mergedMap.has(d.id)) {
-          mergedMap.set(d.id, {
-            ...d,
-            is_family_vault: true,
-            family_vault: true,
-            isFamilyVault: true,
-          });
-        }
+
+      // Also ensure all documents from all families' member caches are merged
+      const currentFamilies = families.length > 0 ? families : await api.getFamilies().catch(() => []);
+      (currentFamilies || []).forEach(f => {
+        ((f as any).documents || []).forEach((d: any) => {
+          const dUid = String(d?.user_id || d?.userId || d?.owner_id || d?.ownerId || '');
+          const myUid = String(user?.id || '');
+          if (d && d.id && dUid && myUid && dUid !== myUid && !mergedMap.has(d.id)) {
+            mergedMap.set(d.id, {
+              ...d,
+              is_family_vault: true,
+              family_vault: true,
+              isFamilyVault: true,
+            });
+          }
+        });
       });
       return Array.from(mergedMap.values());
     },
     enabled: isAuthenticated,
+    refetchInterval: 12000,
   });
 
   const { data: sharedByMe = [], refetch: refetchSharedByMe } = useQuery<DocumentItem[]>({
-    queryKey: ['shared_by_me', families, documents],
+    queryKey: ['shared_by_me'],
     queryFn: async () => {
       const fromApi = await api.getSharedByMe();
-      const fromFamilies = (families || []).flatMap(f => (f as any).documents || []);
-      const fromDocs = (documents || []).filter(d => Boolean(d.is_family_vault || (d as any).family_vault || (d as any).isFamilyVault));
       const mergedMap = new Map<string, DocumentItem>();
       (fromApi || []).forEach(d => {
         if (d && d.id) mergedMap.set(d.id, d);
       });
-      (fromDocs || []).forEach(d => {
-        if (d && d.id && !mergedMap.has(d.id)) {
-          mergedMap.set(d.id, d);
-        }
-      });
-      (fromFamilies || []).forEach(d => {
-        if (d && d.id && (d.user_id === user?.id || (d as any).userId === user?.id) && !mergedMap.has(d.id)) {
+
+      (documents || []).forEach(d => {
+        const isFam = Boolean(d?.is_family_vault ?? (d as any)?.family_vault ?? (d as any)?.isFamilyVault);
+        if (d && d.id && isFam && !mergedMap.has(d.id)) {
           mergedMap.set(d.id, d);
         }
       });
       return Array.from(mergedMap.values());
     },
     enabled: isAuthenticated,
+    refetchInterval: 12000,
   });
 
   const { data: emergencyContacts = [], refetch: refetchEmergencyContacts } = useQuery<EmergencyContact[]>({
@@ -453,6 +458,7 @@ export const AppContent: React.FC = () => {
 
         <FamilyInviteModal
           familyId={inviteFamilyId || ''}
+          families={families}
           isOpen={!!inviteFamilyId}
           onClose={() => setInviteFamilyId(null)}
           onSuccess={handleRefreshAll}

@@ -43,29 +43,6 @@ public class FamilyService {
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(FamilyService.class);
 
     public List<FamilyGroupDetails> getUserFamilyGroups(User user) {
-        // Auto-link and activate any pending family invitations for this user's email
-        if (user.getEmail() != null && !user.getEmail().trim().isEmpty()) {
-            try {
-                List<FamilyInvitation> pending = familyInvitationRepository.findByInviteeEmail(user.getEmail().trim().toLowerCase());
-                for (FamilyInvitation inv : pending) {
-                    if ("PENDING".equalsIgnoreCase(inv.getStatus())) {
-                        inv.setStatus("ACCEPTED");
-                        familyInvitationRepository.save(inv);
-                    }
-                    if (inv.getFamilyGroupId() != null) {
-                        Optional<FamilyMember> existingM = familyMemberRepository.findByFamilyGroupIdAndUserId(inv.getFamilyGroupId(), user.getId());
-                        if (!existingM.isPresent()) {
-                            FamilyMember m = new FamilyMember(inv.getFamilyGroupId(), user.getId(), "MEMBER");
-                            m.setStatus("ACTIVE");
-                            familyMemberRepository.save(m);
-                        }
-                    }
-                }
-            } catch (Exception ex) {
-                logger.warn("Could not auto-link family invitations: {}", ex.getMessage());
-            }
-        }
-
         List<FamilyMember> memberships = familyMemberRepository.findByUserId(user.getId());
         List<FamilyGroupDetails> results = new ArrayList<>();
         Set<String> seenGroupIds = new HashSet<>();
@@ -92,6 +69,7 @@ public class FamilyService {
             group = familyGroupRepository.save(group);
 
             FamilyMember member = new FamilyMember(group.getId(), user.getId(), "ADMIN");
+            member.setStatus("ACTIVE");
             familyMemberRepository.save(member);
             results.add(getGroupDetails(group));
         }
@@ -110,6 +88,21 @@ public class FamilyService {
         });
 
         return results;
+    }
+
+    public FamilyGroupDetails createFamilyGroup(User user, String groupName) {
+        String name = (groupName != null && !groupName.trim().isEmpty())
+                ? groupName.trim()
+                : user.getFullName() + "'s Family Vault";
+
+        FamilyGroup group = new FamilyGroup(name, user.getId());
+        group = familyGroupRepository.save(group);
+
+        FamilyMember member = new FamilyMember(group.getId(), user.getId(), "ADMIN");
+        member.setStatus("ACTIVE");
+        familyMemberRepository.save(member);
+
+        return getGroupDetails(group);
     }
 
     public FamilyGroupDetails getOrCreateFamilyGroup(User user) {
@@ -191,58 +184,110 @@ public class FamilyService {
     }
 
     public FamilyInvitation inviteMember(User user, String inviteeEmail) {
-        FamilyGroupDetails details = getOrCreateFamilyGroup(user);
+        return inviteMember(user, null, inviteeEmail, "MEMBER");
+    }
+
+    public FamilyInvitation inviteMember(User user, String familyId, String inviteeEmail, String role) {
+        if (inviteeEmail == null || inviteeEmail.trim().isEmpty()) {
+            throw new RuntimeException("Invitee email address is required.");
+        }
+
+        FamilyGroup targetGroup;
+        if (familyId != null && !familyId.trim().isEmpty()) {
+            targetGroup = familyGroupRepository.findById(familyId.trim())
+                    .orElseThrow(() -> new RuntimeException("Family group not found."));
+            // Check permission: user must be owner or admin of this family group
+            boolean isOwner = targetGroup.getOwnerId().equals(user.getId());
+            boolean isAdmin = familyMemberRepository.findByFamilyGroupIdAndUserId(targetGroup.getId(), user.getId())
+                    .map(m -> "ADMIN".equalsIgnoreCase(m.getRole()) || "OWNER".equalsIgnoreCase(m.getRole()))
+                    .orElse(false);
+            if (!isOwner && !isAdmin) {
+                throw new RuntimeException("Only vault admins or the owner can invite members.");
+            }
+        } else {
+            FamilyGroupDetails defaultGroup = getOrCreateFamilyGroup(user);
+            targetGroup = familyGroupRepository.findById(defaultGroup.getId())
+                    .orElseThrow(() -> new RuntimeException("Default family group not found."));
+        }
+
         String cleanEmail = inviteeEmail.trim().toLowerCase();
+        if (user.getEmail() != null && cleanEmail.equalsIgnoreCase(user.getEmail().trim().toLowerCase())) {
+            throw new RuntimeException("You cannot invite yourself to your own Family Vault.");
+        }
+
+        // Check if user is already a member
+        Optional<User> existingUserOpt = userRepository.findByEmail(cleanEmail);
+        if (existingUserOpt.isPresent()) {
+            User existingUser = existingUserOpt.get();
+            if (targetGroup.getOwnerId().equals(existingUser.getId()) ||
+                    familyMemberRepository.findByFamilyGroupIdAndUserId(targetGroup.getId(), existingUser.getId()).isPresent()) {
+                throw new RuntimeException("This user is already a member of this Family Vault.");
+            }
+        }
+
+        // Check for existing pending invitation to this family group
+        List<FamilyInvitation> existingInvs = familyInvitationRepository.findByFamilyGroupId(targetGroup.getId());
+        for (FamilyInvitation inv : existingInvs) {
+            if (cleanEmail.equalsIgnoreCase(inv.getInviteeEmail()) && "PENDING".equalsIgnoreCase(inv.getStatus())) {
+                Calendar cal = Calendar.getInstance();
+                cal.add(Calendar.DAY_OF_YEAR, 7);
+                inv.setExpiresAt(cal.getTime());
+                familyInvitationRepository.save(inv);
+
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        emailService.sendFamilyInvitationEmail(
+                                cleanEmail,
+                                user.getFullName(),
+                                targetGroup.getName(),
+                                inv.getToken(),
+                                cal.getTime()
+                        );
+                    } catch (Exception ex) {
+                        logger.warn("Could not resend invitation email: {}", ex.getMessage());
+                    }
+                });
+                return inv;
+            }
+        }
 
         String token = UUID.randomUUID().toString();
         Calendar cal = Calendar.getInstance();
         cal.add(Calendar.DAY_OF_YEAR, 7); // 7 days expiration
 
         FamilyInvitation invitation = new FamilyInvitation(
-                details.getId(),
+                targetGroup.getId(),
                 user.getId(),
                 cleanEmail,
                 token,
                 cal.getTime()
         );
+        invitation.setStatus("PENDING");
 
-        // If invitee is already a registered user, immediately add them to the family group!
-        Optional<User> existingUserOpt = userRepository.findByEmail(cleanEmail);
-        if (existingUserOpt.isPresent()) {
-            User existingUser = existingUserOpt.get();
-            invitation.setStatus("ACCEPTED");
+        FamilyInvitation saved = familyInvitationRepository.save(invitation);
 
-            Optional<FamilyMember> existingMember = familyMemberRepository.findByFamilyGroupIdAndUserId(
-                    details.getId(), existingUser.getId());
-            if (!existingMember.isPresent()) {
-                FamilyMember member = new FamilyMember(details.getId(), existingUser.getId(), "MEMBER");
-                member.setStatus("ACTIVE");
-                familyMemberRepository.save(member);
-            }
-
-            if (notificationRepository != null) {
-                try {
-                    Notification notif = new Notification(
-                            existingUser.getId(),
-                            "Added to Family Vault",
-                            user.getFullName() + " added you to the \"" + details.getName() + "\" Family Vault. You can now view and share family documents.",
-                            "FAMILY_INVITE",
-                            null
-                    );
-                    notificationRepository.save(notif);
-                } catch (Exception ex) {
-                    logger.warn("Could not save in-app family notification: {}", ex.getMessage());
-                }
+        // Send in-app notification to invitee if registered
+        if (existingUserOpt.isPresent() && notificationRepository != null) {
+            try {
+                Notification notif = new Notification(
+                        existingUserOpt.get().getId(),
+                        "Family Vault Invitation",
+                        user.getFullName() + " invited you to join the \"" + targetGroup.getName() + "\" Family Vault.",
+                        "FAMILY_INVITE",
+                        null
+                );
+                notificationRepository.save(notif);
+            } catch (Exception ex) {
+                logger.warn("Could not save in-app family notification: {}", ex.getMessage());
             }
         }
 
-        FamilyInvitation saved = familyInvitationRepository.save(invitation);
         CompletableFuture.runAsync(() -> {
             try {
                 emailService.sendFamilyInvitationEmail(
                         cleanEmail,
                         user.getFullName(),
-                        details.getName(),
+                        targetGroup.getName(),
                         token,
                         cal.getTime()
                 );
@@ -254,10 +299,28 @@ public class FamilyService {
     }
 
     public List<Map<String, Object>> getPendingInvitations(User user) {
-        List<FamilyInvitation> list = familyInvitationRepository.findByInviteeEmail(user.getEmail());
+        String userEmail = user.getEmail() != null ? user.getEmail().trim().toLowerCase() : "";
+        List<FamilyInvitation> list = familyInvitationRepository.findByInviteeEmail(userEmail);
+        if (user.getEmail() != null && !user.getEmail().equalsIgnoreCase(userEmail)) {
+            list.addAll(familyInvitationRepository.findByInviteeEmail(user.getEmail()));
+        }
+
         List<Map<String, Object>> response = new ArrayList<>();
+        Set<String> seenInvIds = new HashSet<>();
+        Date now = new Date();
+
         for (FamilyInvitation inv : list) {
+            if (inv.getId() != null && seenInvIds.contains(inv.getId())) {
+                continue;
+            }
             if ("PENDING".equalsIgnoreCase(inv.getStatus())) {
+                if (inv.getExpiresAt() != null && inv.getExpiresAt().before(now)) {
+                    inv.setStatus("EXPIRED");
+                    familyInvitationRepository.save(inv);
+                    continue;
+                }
+
+                seenInvIds.add(inv.getId());
                 Map<String, Object> map = new HashMap<>();
                 map.put("id", inv.getId());
                 map.put("token", inv.getToken());
@@ -287,11 +350,17 @@ public class FamilyService {
             invOpt = familyInvitationRepository.findById(tokenOrId);
         }
         if (!invOpt.isPresent()) {
-            throw new RuntimeException("Invalid invitation token");
+            throw new RuntimeException("Invalid or expired invitation token.");
         }
         FamilyInvitation invitation = invOpt.get();
         if ("ACCEPTED".equalsIgnoreCase(invitation.getStatus())) {
             return true;
+        }
+
+        if (invitation.getExpiresAt() != null && invitation.getExpiresAt().before(new Date())) {
+            invitation.setStatus("EXPIRED");
+            familyInvitationRepository.save(invitation);
+            throw new RuntimeException("This invitation has expired.");
         }
 
         invitation.setStatus("ACCEPTED");
@@ -302,7 +371,26 @@ public class FamilyService {
 
         if (!existing.isPresent()) {
             FamilyMember member = new FamilyMember(invitation.getFamilyGroupId(), user.getId(), "MEMBER");
+            member.setStatus("ACTIVE");
             familyMemberRepository.save(member);
+        }
+
+        // Notify inviter
+        if (notificationRepository != null && invitation.getInviterId() != null) {
+            try {
+                familyGroupRepository.findById(invitation.getFamilyGroupId()).ifPresent(g -> {
+                    Notification notif = new Notification(
+                            invitation.getInviterId(),
+                            "Invitation Accepted",
+                            user.getFullName() + " accepted your invitation to join \"" + g.getName() + "\".",
+                            "FAMILY_JOIN",
+                            null
+                    );
+                    notificationRepository.save(notif);
+                });
+            } catch (Exception ex) {
+                logger.warn("Could not save invitation accepted notification: {}", ex.getMessage());
+            }
         }
         return true;
     }
@@ -321,14 +409,68 @@ public class FamilyService {
         return true;
     }
 
-    public void removeMember(User user, String memberUserIdOrId) {
-        FamilyGroupDetails details = getOrCreateFamilyGroup(user);
-        if (!details.getOwnerId().equals(user.getId())) {
-            throw new RuntimeException("Only the family locker owner can remove members.");
+    public void leaveFamilyGroup(User user, String familyGroupId) {
+        FamilyGroup group = familyGroupRepository.findById(familyGroupId)
+                .orElseThrow(() -> new RuntimeException("Family group not found."));
+
+        if (group.getOwnerId().equals(user.getId())) {
+            List<FamilyMember> members = familyMemberRepository.findByFamilyGroupId(familyGroupId);
+            boolean hasOtherMembers = members.stream()
+                    .anyMatch(m -> m.getUserId() != null && !m.getUserId().equals(user.getId()));
+            if (hasOtherMembers) {
+                throw new RuntimeException("As vault owner, you cannot leave while other members belong to this group. You may delete the vault or remove members first.");
+            }
+            deleteFamilyGroup(user, familyGroupId);
+            return;
         }
-        familyMemberRepository.deleteByFamilyGroupIdAndUserId(details.getId(), memberUserIdOrId);
+
+        familyMemberRepository.deleteByFamilyGroupIdAndUserId(familyGroupId, user.getId());
+    }
+
+    public void deleteFamilyGroup(User user, String familyGroupId) {
+        FamilyGroup group = familyGroupRepository.findById(familyGroupId)
+                .orElseThrow(() -> new RuntimeException("Family group not found."));
+
+        if (!group.getOwnerId().equals(user.getId())) {
+            throw new RuntimeException("Only the vault owner can delete this Family Vault.");
+        }
+
+        familyMemberRepository.deleteByFamilyGroupId(familyGroupId);
+        familyInvitationRepository.deleteByFamilyGroupId(familyGroupId);
+        familyGroupRepository.delete(group);
+    }
+
+    public void removeMember(User user, String memberUserIdOrId) {
+        removeMember(user, null, memberUserIdOrId);
+    }
+
+    public void removeMember(User user, String familyId, String memberUserIdOrId) {
+        FamilyGroup targetGroup;
+        if (familyId != null && !familyId.trim().isEmpty()) {
+            targetGroup = familyGroupRepository.findById(familyId.trim())
+                    .orElseThrow(() -> new RuntimeException("Family group not found."));
+        } else {
+            FamilyGroupDetails details = getOrCreateFamilyGroup(user);
+            targetGroup = familyGroupRepository.findById(details.getId())
+                    .orElseThrow(() -> new RuntimeException("Family group not found."));
+        }
+
+        boolean isOwner = targetGroup.getOwnerId().equals(user.getId());
+        boolean isAdmin = familyMemberRepository.findByFamilyGroupIdAndUserId(targetGroup.getId(), user.getId())
+                .map(m -> "ADMIN".equalsIgnoreCase(m.getRole()) || "OWNER".equalsIgnoreCase(m.getRole()))
+                .orElse(false);
+
+        if (!isOwner && !isAdmin) {
+            throw new RuntimeException("Only vault admins or the owner can remove members.");
+        }
+
+        if (targetGroup.getOwnerId().equals(memberUserIdOrId)) {
+            throw new RuntimeException("Cannot remove the vault owner from the family group.");
+        }
+
+        familyMemberRepository.deleteByFamilyGroupIdAndUserId(targetGroup.getId(), memberUserIdOrId);
         familyMemberRepository.findById(memberUserIdOrId).ifPresent(m -> {
-            if (m.getFamilyGroupId().equals(details.getId())) {
+            if (m.getFamilyGroupId().equals(targetGroup.getId())) {
                 familyMemberRepository.delete(m);
             }
         });

@@ -83,12 +83,24 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
   const [contactEmail, setContactEmail] = useState('');
   const [isSavingContact, setIsSavingContact] = useState(false);
 
-  const [selectedFamilyId, setSelectedFamilyId] = useState<string>('');
+  const [selectedFamilyId, setSelectedFamilyId] = useState<string>(() => {
+    return localStorage.getItem('docuvault_selected_family_id') || '';
+  });
+
+  const selectFamily = (id: string) => {
+    setSelectedFamilyId(id);
+    localStorage.setItem('docuvault_selected_family_id', id);
+  };
 
   const primaryFamily = React.useMemo(() => {
     if (!families || families.length === 0) return null;
     if (selectedFamilyId) {
       const match = families.find(f => (f.id || (f as any)._id) === selectedFamilyId);
+      if (match) return match;
+    }
+    const stored = localStorage.getItem('docuvault_selected_family_id');
+    if (stored) {
+      const match = families.find(f => (f.id || (f as any)._id) === stored);
       if (match) return match;
     }
     const multiMember = families.find(f => (f.members?.length || 0) > 1);
@@ -98,7 +110,14 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
     return families[0];
   }, [families, selectedFamilyId, user?.id]);
 
-  // Unified list of all shared documents in this family group
+  React.useEffect(() => {
+    if (primaryFamily && (!selectedFamilyId || !families.some(f => f.id === selectedFamilyId))) {
+      setSelectedFamilyId(primaryFamily.id);
+      localStorage.setItem('docuvault_selected_family_id', primaryFamily.id);
+    }
+  }, [primaryFamily, selectedFamilyId, families]);
+
+  // Unified list of all shared documents in this family vault ecosystem
   const allVaultDocuments = React.useMemo(() => {
     const map = new Map<string, DocumentItem>();
 
@@ -123,18 +142,22 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
       }
     });
 
-    // 4. Primary family group documents if populated
-    (primaryFamily?.documents || []).forEach((doc: any) => {
-      if (doc && doc.id && !map.has(doc.id)) {
-        map.set(doc.id, doc);
-      }
+    // 4. Documents across ALL family groups the user is part of
+    (families || []).forEach(fam => {
+      ((fam as any).documents || []).forEach((doc: any) => {
+        if (doc && doc.id && !map.has(doc.id)) {
+          map.set(doc.id, doc);
+        }
+      });
     });
 
     return Array.from(map.values());
-  }, [sharedWithMe, sharedByMe, documents, primaryFamily?.documents]);
+  }, [sharedWithMe, sharedByMe, documents, families]);
+
+  const [docScope, setDocScope] = useState<'all' | 'active'>('all');
 
   const isSender = (doc: DocumentItem): boolean => {
-    const docUserId = (doc as any).userId || (doc as any).user_id || (doc as any).ownerId || (doc as any).owner_id;
+    const docUserId = String((doc as any).userId || (doc as any).user_id || (doc as any).ownerId || (doc as any).owner_id || '');
     return Boolean(docUserId && user?.id && docUserId === user.id);
   };
 
@@ -158,10 +181,21 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
     if (isSender(doc)) {
       return 'You';
     }
-    const docUserId = (doc as any).userId || (doc as any).user_id;
+    const docUserId = String((doc as any).userId || (doc as any).user_id || '');
     if (primaryFamily?.members && docUserId) {
       const match = primaryFamily.members.find((m: any) => {
-        const mUid = m.userId || m.user_id || m.id;
+        const mUid = String(m.userId || m.user_id || m.id || '');
+        return mUid === docUserId;
+      });
+      if (match) {
+        const name = (match as any).fullName || (match as any).full_name || (match as any).user_name || match.email;
+        if (name) return name;
+      }
+    }
+    // Also check other families
+    for (const f of families) {
+      const match = (f.members || []).find((m: any) => {
+        const mUid = String(m.userId || m.user_id || m.id || '');
         return mUid === docUserId;
       });
       if (match) {
@@ -181,15 +215,32 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
     return 'Group Member';
   };
 
-  const filteredVaultDocs = React.useMemo(() => {
-    if (docsFilter === 'others') {
-      return allVaultDocuments.filter(d => !isSender(d));
-    }
-    if (docsFilter === 'mine') {
-      return allVaultDocuments.filter(d => isSender(d));
+  const scopedVaultDocs = React.useMemo(() => {
+    if (docScope === 'active' && primaryFamily) {
+      const memberUserIds = new Set<string>();
+      if (primaryFamily.owner_id) memberUserIds.add(String(primaryFamily.owner_id));
+      if ((primaryFamily as any).ownerId) memberUserIds.add(String((primaryFamily as any).ownerId));
+      (primaryFamily.members || []).forEach((m: any) => {
+        const uid = String(m.userId || m.user_id || m.id || '');
+        if (uid) memberUserIds.add(uid);
+      });
+      return allVaultDocuments.filter(d => {
+        const dUid = String((d as any).userId || (d as any).user_id || (d as any).ownerId || (d as any).owner_id || '');
+        return memberUserIds.has(dUid) || isSender(d);
+      });
     }
     return allVaultDocuments;
-  }, [allVaultDocuments, docsFilter, user?.id]);
+  }, [allVaultDocuments, docScope, primaryFamily, user?.id]);
+
+  const filteredVaultDocs = React.useMemo(() => {
+    if (docsFilter === 'others') {
+      return scopedVaultDocs.filter(d => !isSender(d));
+    }
+    if (docsFilter === 'mine') {
+      return scopedVaultDocs.filter(d => isSender(d));
+    }
+    return scopedVaultDocs;
+  }, [scopedVaultDocs, docsFilter, user?.id]);
 
   const handleMakePersonal = async (e: React.MouseEvent, doc: DocumentItem) => {
     e.stopPropagation();
@@ -238,7 +289,7 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
     }
   };
 
-    // Auto-accept invitation from email deep link if token is present
+  // Auto-accept invitation from email deep link if token is present
   React.useEffect(() => {
     const pendingToken = localStorage.getItem('pending_invite_token');
     if (pendingToken) {
@@ -247,7 +298,7 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
     }
   }, []);
 
-    const handleJoinWithToken = async (e: React.FormEvent) => {
+  const handleJoinWithToken = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualToken.trim()) return;
     setIsJoiningWithToken(true);
@@ -270,9 +321,13 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
     if (!familyName.trim()) return;
     setIsCreatingFamily(true);
     try {
-      await api.createFamily(familyName.trim());
+      const newGroup = await api.createFamily(familyName.trim());
+      if (newGroup && newGroup.id) {
+        selectFamily(newGroup.id);
+      }
       setFamilyName('');
       setShowCreateFamily(false);
+      showLocalNotification('Family Vault Created', `"${familyName.trim()}" created successfully!`);
       onRefresh();
     } catch (e: any) {
       alert(e.message || 'Failed to create family group');
@@ -281,9 +336,47 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
     }
   };
 
+  const handleLeaveFamily = async (fam: FamilyGroup) => {
+    if (!window.confirm(`Leave "${fam.name}" Family Vault?\n\nYou will no longer have access to documents shared in this vault group.`)) {
+      return;
+    }
+    try {
+      await api.leaveFamily(fam.id);
+      showLocalNotification('Family Vault Updated', `You left "${fam.name}".`);
+      if (selectedFamilyId === fam.id) {
+        localStorage.removeItem('docuvault_selected_family_id');
+        setSelectedFamilyId('');
+      }
+      onRefresh();
+    } catch (err: any) {
+      alert(err.message || 'Failed to leave family group');
+    }
+  };
+
+  const handleDeleteFamily = async (fam: FamilyGroup) => {
+    if (!window.confirm(`Delete "${fam.name}" Family Vault?\n\nThis will permanently remove this vault group for all members. Member personal documents will NOT be deleted.`)) {
+      return;
+    }
+    try {
+      await api.deleteFamily(fam.id);
+      showLocalNotification('Family Vault Deleted', `"${fam.name}" was deleted.`);
+      if (selectedFamilyId === fam.id) {
+        localStorage.removeItem('docuvault_selected_family_id');
+        setSelectedFamilyId('');
+      }
+      onRefresh();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete family group');
+    }
+  };
+
   const handleRespondInvitation = async (invId: string, action: 'ACCEPT' | 'REJECT') => {
     try {
       await api.respondToInvitation(invId, action);
+      showLocalNotification(
+        action === 'ACCEPT' ? 'Invitation Accepted' : 'Invitation Declined',
+        action === 'ACCEPT' ? 'You joined the Family Vault!' : 'Invitation was declined.'
+      );
       onRefresh();
     } catch (e: any) {
       alert(e.message || 'Action failed');
@@ -361,12 +454,12 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
     }
   };
 
-    const handleRemoveMember = async (memberIdOrUserId: string, name: string) => {
-    if (!confirm(`Are you sure you want to remove ${name} from this Family Vault?`)) {
+  const handleRemoveMember = async (memberIdOrUserId: string, name: string) => {
+    if (!confirm(`Are you sure you want to remove ${name} from "${primaryFamily?.name || 'this Family Vault'}"?`)) {
       return;
     }
     try {
-      await api.removeFamilyMember(memberIdOrUserId);
+      await api.removeFamilyMember(memberIdOrUserId, primaryFamily?.id);
       showLocalNotification('Family Vault Updated', `${name} was removed from the family vault.`);
       onRefresh();
     } catch (e: any) {
@@ -401,6 +494,26 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
           >
             <KeyRound size={14} />
             <span>Enter Token</span>
+          </button>
+
+          <button
+            onClick={() => setShowCreateFamily(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '8px 12px',
+              borderRadius: 10,
+              backgroundColor: colors.surfaceCard,
+              color: colors.text,
+              border: `1px solid ${colors.surfaceBorder}`,
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            <Plus size={14} color={colors.accentLight} />
+            <span>New Vault</span>
           </button>
 
           {primaryFamily && (
@@ -542,66 +655,309 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
             </div>
           )}
 
-          {primaryFamily ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {families.length > 1 && (
+          {/* Family Vault Groups Management Section */}
+          <div style={{
+            padding: 16,
+            borderRadius: 16,
+            backgroundColor: colors.surfaceCard,
+            border: `1px solid ${colors.surfaceBorder}`,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 14,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 10,
+                  backgroundColor: 'rgba(13, 148, 136, 0.15)',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 8,
-                  overflowX: 'auto',
-                  paddingBottom: 4,
-                  scrollbarWidth: 'none',
+                  justifyContent: 'center',
+                  color: colors.accentLight,
                 }}>
-                  {families.map(f => {
-                    const isSelected = f.id === primaryFamily.id;
-                    const isOwner = f.owner_id === user?.id || (f as any).ownerId === user?.id;
-                    return (
-                      <button
-                        key={f.id}
-                        type="button"
-                        onClick={() => setSelectedFamilyId(f.id)}
-                        style={{
-                          padding: '6px 14px',
-                          borderRadius: 20,
-                          backgroundColor: isSelected ? colors.accent : colors.surfaceCard,
-                          color: isSelected ? '#FFF' : colors.textMuted,
-                          border: `1px solid ${isSelected ? colors.accent : colors.surfaceBorder}`,
-                          fontSize: 12,
-                          fontWeight: isSelected ? 700 : 500,
-                          cursor: 'pointer',
-                          whiteSpace: 'nowrap',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          transition: 'all 0.15s ease',
-                        }}
-                      >
-                        <Users size={12} />
-                        <span>{f.name}</span>
-                        <span style={{
-                          fontSize: 10,
-                          backgroundColor: isSelected ? 'rgba(255,255,255,0.2)' : 'rgba(13,148,136,0.15)',
-                          color: isSelected ? '#FFF' : colors.accentLight,
-                          padding: '1px 6px',
-                          borderRadius: 10,
-                          fontWeight: 700,
-                        }}>
-                          {f.members?.length || 0}
-                        </span>
-                        <span style={{
-                          fontSize: 9,
-                          opacity: 0.8,
-                          textTransform: 'uppercase',
-                          fontWeight: 700,
-                        }}>
-                          {isOwner ? 'Admin' : 'Member'}
-                        </span>
-                      </button>
-                    );
-                  })}
+                  <Users size={20} />
                 </div>
-              )}
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: colors.text }}>
+                    Family Vault Groups ({families.length})
+                  </div>
+                  <div style={{ fontSize: 11, color: colors.textMuted }}>
+                    Switch active group or create separate lockers
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowCreateFamily(prev => !prev)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '7px 12px',
+                  borderRadius: 10,
+                  backgroundColor: showCreateFamily ? colors.surface : colors.accent,
+                  color: showCreateFamily ? colors.text : '#FFF',
+                  border: showCreateFamily ? `1px solid ${colors.surfaceBorder}` : 'none',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  boxShadow: showCreateFamily ? 'none' : '0 2px 8px rgba(13, 148, 136, 0.3)',
+                }}
+              >
+                <Plus size={14} />
+                <span>{showCreateFamily ? 'Cancel' : 'New Vault'}</span>
+              </button>
+            </div>
+
+            {/* Inline Create Family Group Form */}
+            {showCreateFamily && (
+              <form
+                onSubmit={handleCreateFamily}
+                style={{
+                  padding: 14,
+                  borderRadius: 12,
+                  backgroundColor: colors.surface,
+                  border: `1px solid ${colors.accent}`,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10,
+                }}
+              >
+                <div style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>
+                  Create New Family Vault Group
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. In-Laws Vault, Sharma Joint Locker"
+                    value={familyName}
+                    onChange={e => setFamilyName(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: '9px 12px',
+                      borderRadius: 10,
+                      backgroundColor: colors.surfaceCard,
+                      border: `1px solid ${colors.surfaceBorder}`,
+                      color: colors.text,
+                      fontSize: 13,
+                      outline: 'none',
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={isCreatingFamily}
+                    style={{
+                      padding: '9px 16px',
+                      borderRadius: 10,
+                      backgroundColor: colors.accent,
+                      color: '#FFF',
+                      border: 'none',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: isCreatingFamily ? 'wait' : 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {isCreatingFamily ? 'Creating...' : 'Create Vault'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* List of Family Groups */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {families.map(fam => {
+                const isSelected = fam.id === primaryFamily?.id;
+                const isOwner = fam.owner_id === user?.id || (fam as any).ownerId === user?.id;
+                const memberCount = fam.members?.length || 0;
+                const docCount = fam.documents?.length || 0;
+
+                const myRole = isOwner ? 'OWNER' : (
+                  (fam.members || []).find((m: any) => {
+                    const mUid = String(m.userId || m.user_id || m.id || '');
+                    return mUid === user?.id;
+                  })?.role || 'MEMBER'
+                );
+
+                return (
+                  <div
+                    key={fam.id}
+                    style={{
+                      padding: 14,
+                      borderRadius: 14,
+                      backgroundColor: isSelected ? 'rgba(13, 148, 136, 0.08)' : colors.surface,
+                      border: `1.5px solid ${isSelected ? colors.accent : colors.surfaceBorder}`,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 10,
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    {/* Top Row: Vault Name + Badges */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                        <div style={{
+                          fontSize: 15,
+                          fontWeight: 700,
+                          color: colors.text,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {fam.name}
+                        </div>
+
+                        {isSelected && (
+                          <span style={{
+                            padding: '2px 8px',
+                            borderRadius: 6,
+                            fontSize: 10,
+                            fontWeight: 800,
+                            backgroundColor: colors.accent,
+                            color: '#FFF',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 3,
+                          }}>
+                            ✓ ACTIVE
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{
+                          padding: '2px 8px',
+                          borderRadius: 6,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          backgroundColor: isOwner ? 'rgba(234, 179, 8, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                          color: isOwner ? '#EAB308' : '#3B82F6',
+                        }}>
+                          {myRole}
+                        </span>
+
+                        <span style={{
+                          padding: '2px 8px',
+                          borderRadius: 6,
+                          fontSize: 10,
+                          fontWeight: 600,
+                          backgroundColor: colors.surfaceCard,
+                          color: colors.textMuted,
+                          border: `1px solid ${colors.surfaceBorder}`,
+                        }}>
+                          {memberCount} {memberCount === 1 ? 'member' : 'members'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Bottom Row: Actions (Switch, Invite, Leave, Delete) */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', paddingTop: 2 }}>
+                      <div>
+                        {!isSelected ? (
+                          <button
+                            type="button"
+                            onClick={() => selectFamily(fam.id)}
+                            style={{
+                              padding: '6px 12px',
+                              borderRadius: 8,
+                              backgroundColor: colors.accent,
+                              color: '#FFF',
+                              border: 'none',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 5,
+                            }}
+                          >
+                            <ShieldCheck size={13} />
+                            <span>Switch to this Vault</span>
+                          </button>
+                        ) : (
+                          <span style={{ fontSize: 11, color: colors.accentLight, fontWeight: 600 }}>
+                            Currently Viewing & Managing
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <button
+                          type="button"
+                          onClick={() => onOpenInvite(fam.id)}
+                          style={{
+                            padding: '6px 10px',
+                            borderRadius: 8,
+                            backgroundColor: colors.surfaceCard,
+                            border: `1px solid ${colors.surfaceBorder}`,
+                            color: colors.text,
+                            fontSize: 11,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                        >
+                          <UserPlus size={12} color={colors.accentLight} />
+                          <span>Invite</span>
+                        </button>
+
+                        {!isOwner ? (
+                          <button
+                            type="button"
+                            title="Leave this family group"
+                            onClick={() => handleLeaveFamily(fam)}
+                            style={{
+                              padding: '6px 10px',
+                              borderRadius: 8,
+                              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                              border: '1px solid rgba(239, 68, 68, 0.25)',
+                              color: '#EF4444',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Leave
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            title="Delete this family group"
+                            onClick={() => handleDeleteFamily(fam)}
+                            style={{
+                              padding: '6px 10px',
+                              borderRadius: 8,
+                              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                              border: '1px solid rgba(239, 68, 68, 0.25)',
+                              color: '#EF4444',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <Trash2 size={12} />
+                            <span>Delete</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {primaryFamily ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{
                 padding: 16,
                 borderRadius: 16,
@@ -613,7 +969,7 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
               }}>
                 <div>
                   <div style={{ fontSize: 11, color: colors.textMuted, textTransform: 'uppercase', fontWeight: 600 }}>
-                    Active Family Vault
+                    Active Vault Details
                   </div>
                   <div style={{ fontSize: 18, fontWeight: 800, color: colors.text, marginTop: 2 }}>
                     {primaryFamily.name}
@@ -622,15 +978,36 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
                     {primaryFamily.owner_id === user?.id ? 'Organized by You' : 'Shared Group Locker'}
                   </div>
                 </div>
-                <div style={{
-                  padding: '4px 10px',
-                  borderRadius: 20,
-                  backgroundColor: 'rgba(13, 148, 136, 0.15)',
-                  color: colors.accentLight,
-                  fontSize: 12,
-                  fontWeight: 700,
-                }}>
-                  {primaryFamily.members?.length || 0} Members
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button
+                    onClick={() => onOpenInvite(primaryFamily.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '7px 12px',
+                      borderRadius: 10,
+                      backgroundColor: colors.accent,
+                      color: '#FFF',
+                      border: 'none',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <UserPlus size={13} />
+                    <span>Invite</span>
+                  </button>
+                  <div style={{
+                    padding: '4px 10px',
+                    borderRadius: 20,
+                    backgroundColor: 'rgba(13, 148, 136, 0.15)',
+                    color: colors.accentLight,
+                    fontSize: 12,
+                    fontWeight: 700,
+                  }}>
+                    {primaryFamily.members?.length || 0} Members
+                  </div>
                 </div>
               </div>
 
@@ -920,12 +1297,51 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
               </span>
             </div>
 
+            {/* If user belongs to multiple vaults, show Scope Filter Pills */}
+            {families && families.length > 1 && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: colors.textMuted }}>Scope:</span>
+                <button
+                  type="button"
+                  onClick={() => setDocScope('all')}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: 14,
+                    border: `1px solid ${docScope === 'all' ? colors.accent : colors.surfaceBorder}`,
+                    backgroundColor: docScope === 'all' ? 'rgba(13, 148, 136, 0.15)' : colors.surface,
+                    color: docScope === 'all' ? colors.accentLight : colors.textMuted,
+                    fontSize: 11,
+                    fontWeight: docScope === 'all' ? 700 : 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  All Vaults ({allVaultDocuments.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDocScope('active')}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: 14,
+                    border: `1px solid ${docScope === 'active' ? colors.accent : colors.surfaceBorder}`,
+                    backgroundColor: docScope === 'active' ? 'rgba(13, 148, 136, 0.15)' : colors.surface,
+                    color: docScope === 'active' ? colors.accentLight : colors.textMuted,
+                    fontSize: 11,
+                    fontWeight: docScope === 'active' ? 700 : 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Active: {primaryFamily?.name || 'Current'}
+                </button>
+              </div>
+            )}
+
             {/* Filter Pills */}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {[
-                { id: 'all', label: `All (${allVaultDocuments.length})` },
-                { id: 'others', label: `From Members (${allVaultDocuments.filter(d => !isSender(d)).length})` },
-                { id: 'mine', label: `Uploaded by Me (${allVaultDocuments.filter(d => isSender(d)).length})` },
+                { id: 'all', label: `All (${scopedVaultDocs.length})` },
+                { id: 'others', label: `From Members (${scopedVaultDocs.filter(d => !isSender(d)).length})` },
+                { id: 'mine', label: `Uploaded by Me (${scopedVaultDocs.filter(d => isSender(d)).length})` },
               ].map(f => {
                 const isActive = docsFilter === f.id;
                 return (

@@ -13,4 +13,5 @@ public interface FamilyMemberRepository extends MongoRepository<FamilyMember, St
     List<FamilyMember> findByUserId(String userId);
     Optional<FamilyMember> findByFamilyGroupIdAndUserId(String familyGroupId, String userId);
     void deleteByFamilyGroupIdAndUserId(String familyGroupId, String userId);
+    void deleteByFamilyGroupId(String familyGroupId);
 }
