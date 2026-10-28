@@ -133,8 +133,8 @@ public class EmergencyController {
         List<DocumentResponse> emergencyDocs = documentService.getDocuments(user, null, null, true);
 
         Map<String, Object> resp = new HashMap<>();
-        resp.put("owner_name", user.getFullName() != null && !user.getFullName().isBlank() ? user.getFullName() : "Vault Owner");
-        resp.put("owner_phone", user.getPhone() != null && !user.getPhone().isBlank() ? user.getPhone() : "");
+        resp.put("owner_name", (user.getFullName() != null && !user.getFullName().trim().isEmpty()) ? user.getFullName() : "Vault Owner");
+        resp.put("owner_phone", (user.getPhone() != null && !user.getPhone().trim().isEmpty()) ? user.getPhone() : "");
         resp.put("owner_email", user.getEmail() != null ? user.getEmail() : "");
         resp.put("medical_info", medInfo);
         resp.put("eligible_documents", emergencyDocs);
@@ -150,6 +150,9 @@ public class EmergencyController {
         if (user == null) {
             return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
         }
+
+        String pin = (body != null && body.get("pin") != null) ? String.valueOf(body.get("pin")) : null;
+        boolean isBiometric = (body != null && Boolean.TRUE.equals(body.get("biometric")));
 
         if (pin != null && !pin.trim().isEmpty()) {
             boolean valid = false;

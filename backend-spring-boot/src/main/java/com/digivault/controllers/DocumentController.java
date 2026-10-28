@@ -16,6 +16,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Date;
@@ -311,7 +313,7 @@ public class DocumentController {
     }
 
     private MediaType resolveMediaType(DocumentRecord doc) {
-        if (doc.getMimeType() != null && !doc.getMimeType().isBlank()
+        if (doc.getMimeType() != null && !doc.getMimeType().trim().isEmpty()
                 && !doc.getMimeType().equalsIgnoreCase("application/octet-stream")) {
             try {
                 return MediaType.parseMediaType(doc.getMimeType());
@@ -338,7 +340,7 @@ public class DocumentController {
             // Local file wiped or inaccessible on ephemeral host - attempt database restore
         }
 
-        if (doc.getBase64Data() != null && !doc.getBase64Data().isBlank()) {
+        if (doc.getBase64Data() != null && !doc.getBase64Data().trim().isEmpty()) {
             try {
                 byte[] bytes = Base64.getDecoder().decode(doc.getBase64Data());
                 storageService.restoreFile(doc.getStoredFilename(), bytes);

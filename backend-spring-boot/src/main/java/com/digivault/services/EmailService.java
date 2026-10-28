@@ -10,13 +10,11 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
 import javax.mail.internet.MimeMessage;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
-import java.time.Duration;
 import java.util.*;
 
 @Service
@@ -40,9 +38,6 @@ public class EmailService {
     private String resendApiKey;
 
     private final SecureRandom random = new SecureRandom();
-    private final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .build();
 
     public String generate6DigitOtp() {
         int code = 100000 + random.nextInt(900000);
@@ -142,6 +137,26 @@ public class EmailService {
         return false;
     }
 
+    private int postJson(String urlString, Map<String, String> headers, String json) throws Exception {
+        URL url = new URL(urlString);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("POST");
+        conn.setConnectTimeout(10000);
+        conn.setReadTimeout(12000);
+        conn.setRequestProperty("Content-Type", "application/json");
+        conn.setRequestProperty("Accept", "application/json");
+        if (headers != null) {
+            for (Map.Entry<String, String> entry : headers.entrySet()) {
+                conn.setRequestProperty(entry.getKey(), entry.getValue());
+            }
+        }
+        conn.setDoOutput(true);
+        try (OutputStream os = conn.getOutputStream()) {
+            os.write(json.getBytes(StandardCharsets.UTF_8));
+        }
+        return conn.getResponseCode();
+    }
+
     private boolean sendViaBrevo(String toEmail, String subject, String html) {
         try {
             logger.info("Dispatching email to [{}] via Brevo HTTP REST API (Port 443)...", toEmail);
@@ -162,21 +177,15 @@ public class EmailService {
 
             String json = (objectMapper != null) ? objectMapper.writeValueAsString(payload) : fallbackJson(payload);
 
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("https://api.brevo.com/v3/smtp/email"))
-                    .header("api-key", brevoApiKey.trim())
-                    .header("Content-Type", "application/json")
-                    .header("Accept", "application/json")
-                    .timeout(Duration.ofSeconds(12))
-                    .POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8))
-                    .build();
+            Map<String, String> headers = new HashMap<>();
+            headers.put("api-key", brevoApiKey.trim());
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() >= 200 && response.statusCode() < 300) {
-                logger.info("Successfully delivered email to [{}] via Brevo HTTP API (HTTP {})", toEmail, response.statusCode());
+            int status = postJson("https://api.brevo.com/v3/smtp/email", headers, json);
+            if (status >= 200 && status < 300) {
+                logger.info("Successfully delivered email to [{}] via Brevo HTTP API (HTTP {})", toEmail, status);
                 return true;
             } else {
-                logger.error("Brevo HTTP API rejected email (HTTP {}): {}", response.statusCode(), response.body());
+                logger.error("Brevo HTTP API rejected email (HTTP {})", status);
                 return false;
             }
         } catch (Exception e) {
@@ -201,20 +210,15 @@ public class EmailService {
 
             String json = (objectMapper != null) ? objectMapper.writeValueAsString(payload) : fallbackJson(payload);
 
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("https://api.resend.com/emails"))
-                    .header("Authorization", "Bearer " + resendApiKey.trim())
-                    .header("Content-Type", "application/json")
-                    .timeout(Duration.ofSeconds(12))
-                    .POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8))
-                    .build();
+            Map<String, String> headers = new HashMap<>();
+            headers.put("Authorization", "Bearer " + resendApiKey.trim());
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() >= 200 && response.statusCode() < 300) {
-                logger.info("Successfully delivered email to [{}] via Resend HTTP API (HTTP {})", toEmail, response.statusCode());
+            int status = postJson("https://api.resend.com/emails", headers, json);
+            if (status >= 200 && status < 300) {
+                logger.info("Successfully delivered email to [{}] via Resend HTTP API (HTTP {})", toEmail, status);
                 return true;
             } else {
-                logger.error("Resend HTTP API rejected email (HTTP {}): {}", response.statusCode(), response.body());
+                logger.error("Resend HTTP API rejected email (HTTP {})", status);
                 return false;
             }
         } catch (Exception e) {

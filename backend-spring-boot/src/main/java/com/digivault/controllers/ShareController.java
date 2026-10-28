@@ -80,13 +80,13 @@ public class ShareController {
             return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
         }
         Optional<ShareToken> tokenOpt = shareTokenRepository.findById(shareId);
-        if (tokenOpt.isEmpty()) {
+        if (!tokenOpt.isPresent()) {
             return ResponseEntity.notFound().build();
         }
         ShareToken token = tokenOpt.get();
         // Verify document belongs to current user
         Optional<DocumentRecord> docOpt = documentRepository.findById(token.getDocumentId());
-        if (docOpt.isEmpty() || !docOpt.get().getUserId().equals(user.getId())) {
+        if (!docOpt.isPresent() || !docOpt.get().getUserId().equals(user.getId())) {
             return ResponseEntity.status(403).body(Collections.singletonMap("detail", "Forbidden: You do not own this shared document"));
         }
         token.setActive(false);
@@ -129,7 +129,7 @@ public class ShareController {
     }
 
     private MediaType resolveMediaType(DocumentRecord doc) {
-        if (doc.getMimeType() != null && !doc.getMimeType().isBlank()
+        if (doc.getMimeType() != null && !doc.getMimeType().trim().isEmpty()
                 && !doc.getMimeType().equalsIgnoreCase("application/octet-stream")) {
             try {
                 return MediaType.parseMediaType(doc.getMimeType());
@@ -156,7 +156,7 @@ public class ShareController {
             // Local file wiped on ephemeral host - attempt database restore
         }
 
-        if (doc.getBase64Data() != null && !doc.getBase64Data().isBlank()) {
+        if (doc.getBase64Data() != null && !doc.getBase64Data().trim().isEmpty()) {
             try {
                 byte[] bytes = Base64.getDecoder().decode(doc.getBase64Data());
                 storageService.restoreFile(doc.getStoredFilename(), bytes);

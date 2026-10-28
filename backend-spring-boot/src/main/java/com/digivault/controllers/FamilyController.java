@@ -177,10 +177,10 @@ public class FamilyController {
             DocumentResponse resp = documentService.toResponse(doc);
             if (userRepository != null && doc.getUserId() != null) {
                 userRepository.findById(doc.getUserId()).ifPresent(u -> {
-                    if (resp.getHolderName() == null || resp.getHolderName().isBlank()) {
+                    if (resp.getHolderName() == null || resp.getHolderName().trim().isEmpty()) {
                         resp.setHolderName(u.getFullName());
                     }
-                    if (resp.getIssuer() == null || resp.getIssuer().isBlank() || "Personal".equalsIgnoreCase(resp.getIssuer()) || "Personal Record".equalsIgnoreCase(resp.getIssuer())) {
+                    if (resp.getIssuer() == null || resp.getIssuer().trim().isEmpty() || "Personal".equalsIgnoreCase(resp.getIssuer()) || "Personal Record".equalsIgnoreCase(resp.getIssuer())) {
                         resp.setIssuer("Shared by " + u.getFullName());
                     }
                 });

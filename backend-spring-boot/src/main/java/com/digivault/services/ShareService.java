@@ -70,7 +70,7 @@ public class ShareService {
 
         shareTokenRepository.save(shareToken);
 
-        String base = (frontendUrl != null && !frontendUrl.isBlank()) ? frontendUrl.trim() : "https://docuvault-apk.vercel.app";
+        String base = (frontendUrl != null && !frontendUrl.trim().isEmpty()) ? frontendUrl.trim() : "https://docuvault-apk.vercel.app";
         if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
         String shareUrl = base + "/share/" + token;
         String qrBase64 = generateQrCodeBase64(shareUrl, 250, 250);

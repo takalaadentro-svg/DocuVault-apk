@@ -517,10 +517,10 @@ public class FamilyService {
                     DocumentDto.DocumentResponse r = (documentService != null) ? documentService.toResponse(d) : toDocumentResponseFallback(d);
                     if (userRepository != null && d.getUserId() != null) {
                         userRepository.findById(d.getUserId()).ifPresent(u -> {
-                            if (r.getHolderName() == null || r.getHolderName().isBlank()) {
+                            if (r.getHolderName() == null || r.getHolderName().trim().isEmpty()) {
                                 r.setHolderName(u.getFullName());
                             }
-                            if (r.getIssuer() == null || r.getIssuer().isBlank() || "Personal".equalsIgnoreCase(r.getIssuer()) || "Personal Record".equalsIgnoreCase(r.getIssuer())) {
+                            if (r.getIssuer() == null || r.getIssuer().trim().isEmpty() || "Personal".equalsIgnoreCase(r.getIssuer()) || "Personal Record".equalsIgnoreCase(r.getIssuer())) {
                                 r.setIssuer("Shared by " + u.getFullName());
                             }
                         });

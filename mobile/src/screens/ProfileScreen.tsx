@@ -122,21 +122,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) =>
     setTimeout(() => setNotifSavedMsg(false), 2000);
   };
 
-  const handleTestNotification = async () => {
-    try {
-      await showLocalNotification(
-        '⚠️ Document Expiry Notice (Test)',
-        'Vehicle Insurance expires in 5 days! Please prepare renewal documents.'
-      );
-      try {
-        await api.checkExpiry();
-      } catch (_) {}
-      alert('Test notification successfully dispatched to your phone!');
-    } catch (e: any) {
-      alert('Notification alert: ' + (e?.message || 'Check phone notification permissions'));
-    }
-  };
-
   const handleSendOtpForPassword = async () => {
     if (!user?.email) {
       setPasswordMsg({ text: 'No verified email linked to account', isError: true });
@@ -738,39 +723,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) =>
               />
             </div>
           ))}
-
-          {/* Test Notification Trigger */}
-          <div style={{
-            marginTop: 10,
-            paddingTop: 10,
-            borderTop: `1px dashed ${colors.surfaceBorder}`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}>
-            <div style={{ fontSize: 11, color: colors.textMuted }}>
-              Test device notification channels
-            </div>
-            <button
-              onClick={handleTestNotification}
-              style={{
-                padding: '6px 12px',
-                borderRadius: 8,
-                backgroundColor: colors.surface,
-                border: `1px solid ${colors.surfaceBorder}`,
-                color: colors.accentLight,
-                fontSize: 11,
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-              }}
-            >
-              <Bell size={12} />
-              <span>Send Test Expiry Alert</span>
-            </button>
-          </div>
         </div>
       </div>
 
