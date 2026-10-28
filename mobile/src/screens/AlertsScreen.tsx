@@ -6,6 +6,7 @@ import {
 import { DocumentItem, NotificationItem } from '../types';
 import { api } from '../services/api';
 import { useTheme } from '../context/ThemeContext';
+import { checkAndNotifyExpiries } from '../services/pushNotifications';
 
 interface AlertsScreenProps {
   notifications: NotificationItem[];
@@ -105,6 +106,9 @@ export const AlertsScreen: React.FC<AlertsScreenProps> = ({
     setIsChecking(true);
     try {
       const res = await api.checkExpiry();
+      if (documents && documents.length > 0) {
+        await checkAndNotifyExpiries(documents, true);
+      }
       alert(res.message);
       onRefresh();
     } catch (e: any) {

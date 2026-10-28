@@ -196,6 +196,9 @@ public class AuthDto {
         @com.fasterxml.jackson.annotation.JsonAlias({"newPassword"})
         private String newPassword;
 
+        @com.fasterxml.jackson.annotation.JsonProperty("otp")
+        private String otp;
+
         public ChangePasswordRequest() {}
         public ChangePasswordRequest(String oldPassword, String newPassword) {
             this.oldPassword = oldPassword;
@@ -207,6 +210,9 @@ public class AuthDto {
 
         public String getNewPassword() { return newPassword; }
         public void setNewPassword(String newPassword) { this.newPassword = newPassword; }
+
+        public String getOtp() { return otp; }
+        public void setOtp(String otp) { this.otp = otp; }
     }
 
 }

@@ -63,14 +63,14 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  mode: 'dark',
-  colors: darkColors,
+  mode: 'light',
+  colors: lightColors,
   toggleTheme: () => {},
 });
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [mode, setMode] = useState<ThemeMode>(() => {
-    return (localStorage.getItem('docuvault_theme') as ThemeMode) || (localStorage.getItem('digivault_theme') as ThemeMode) || 'dark';
+    return (localStorage.getItem('docuvault_theme') as ThemeMode) || (localStorage.getItem('digivault_theme') as ThemeMode) || 'light';
   });
 
   useEffect(() => {
@@ -81,7 +81,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setMode(prev => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  const colors = mode === 'dark' ? darkColors : lightColors;
+  const colors = mode === 'light' ? lightColors : darkColors;
 
   return (
     <ThemeContext.Provider value={{ mode, colors, toggleTheme }}>

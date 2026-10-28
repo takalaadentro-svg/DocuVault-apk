@@ -2,8 +2,10 @@ package com.digivault.services;
 
 import com.digivault.models.DocumentRecord;
 import com.digivault.models.Notification;
+import com.digivault.models.User;
 import com.digivault.repositories.DocumentRepository;
 import com.digivault.repositories.NotificationRepository;
+import com.digivault.repositories.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +30,12 @@ public class ExpiryReminderScheduler {
 
     @Autowired
     private NotificationRepository notificationRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired(required = false)
+    private FcmService fcmService;
 
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
 
@@ -142,6 +150,22 @@ public class ExpiryReminderScheduler {
             notification.setChannelCategory("EXPIRY_ALERT");
             notificationRepository.save(notification);
             logger.info("Created new expiry alert for '{}' ({} days left)", doc.getTitle(), daysLeft);
+        }
+
+        // Dispatch FCM Push Notification to user's registered phone
+        if (fcmService != null && doc.getUserId() != null) {
+            try {
+                userRepository.findById(doc.getUserId()).ifPresent(u -> {
+                    if (u.getFcmToken() != null && !u.getFcmToken().trim().isEmpty()) {
+                        Map<String, String> data = new HashMap<>();
+                        data.put("documentId", doc.getId());
+                        data.put("type", "EXPIRY_ALERT");
+                        fcmService.sendPushNotification(u.getFcmToken(), title, message, data);
+                    }
+                });
+            } catch (Exception ex) {
+                logger.warn("Could not dispatch FCM expiry push for user {}: {}", doc.getUserId(), ex.getMessage());
+            }
         }
 
         return true;

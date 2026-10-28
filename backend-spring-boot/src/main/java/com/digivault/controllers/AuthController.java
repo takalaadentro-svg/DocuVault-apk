@@ -163,7 +163,7 @@ public class AuthController {
             return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
         }
         try {
-            authService.changePassword(user, req.getOldPassword(), req.getNewPassword());
+            authService.changePassword(user, req.getOldPassword(), req.getNewPassword(), req.getOtp());
             return ResponseEntity.ok(Collections.singletonMap("message", "Password updated successfully"));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Collections.singletonMap("detail", e.getMessage()));

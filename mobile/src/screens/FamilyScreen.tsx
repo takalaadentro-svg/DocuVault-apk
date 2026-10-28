@@ -63,6 +63,18 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
   const [organDonor, setOrganDonor] = useState(medicalInfo?.organ_donor || false);
   const [isSavingMedical, setIsSavingMedical] = useState(false);
 
+  React.useEffect(() => {
+    if (medicalInfo) {
+      setBloodGroup(medicalInfo.blood_group || (medicalInfo as any).bloodGroup || 'O+');
+      setAllergies(medicalInfo.allergies || '');
+      setMedications(medicalInfo.current_medications || (medicalInfo as any).currentMedications || '');
+      setEmergencyNotes(medicalInfo.emergency_notes || (medicalInfo as any).emergencyNotes || '');
+      setPhysicianName(medicalInfo.physician_name || (medicalInfo as any).physicianName || '');
+      setPhysicianPhone(medicalInfo.physician_phone || (medicalInfo as any).physicianPhone || '');
+      setOrganDonor(Boolean(medicalInfo.organ_donor ?? (medicalInfo as any).organDonor));
+    }
+  }, [medicalInfo]);
+
   // Add Contact state
   const [showAddContact, setShowAddContact] = useState(false);
   const [contactName, setContactName] = useState('');
@@ -334,6 +346,18 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
       onRefresh();
     } catch (e: any) {
       alert(e.message || 'Failed to remove contact');
+    }
+  };
+
+  const handleToggleEmergencyDoc = async (doc: DocumentItem, makeEligible: boolean) => {
+    try {
+      await api.updateDocument(doc.id, {
+        is_emergency_eligible: makeEligible,
+      });
+      showLocalNotification('Emergency Vault', `"${doc.title}" ${makeEligible ? 'added to' : 'removed from'} Emergency Vault.`);
+      onRefresh();
+    } catch (err: any) {
+      alert(err.message || 'Failed to update document emergency eligibility');
     }
   };
 
@@ -1546,6 +1570,187 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Emergency Accessible Documents */}
+          <div style={{
+            padding: 16,
+            borderRadius: 16,
+            backgroundColor: colors.surfaceCard,
+            border: `1px solid ${colors.surfaceBorder}`,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ShieldAlert size={18} color={colors.danger} />
+                <span style={{ fontSize: 14, fontWeight: 700, color: colors.text }}>
+                  Emergency Accessible Documents ({documents.filter(d => Boolean(d.is_emergency_eligible ?? (d as any).emergency_eligible ?? (d as any).isEmergencyEligible)).length})
+                </span>
+              </div>
+            </div>
+
+            <p style={{ fontSize: 11, color: colors.textMuted, margin: '0 0 12px 0', lineHeight: 1.4 }}>
+              These critical documents are immediately decrypted and made available to emergency responders and verified delegated contacts during a Break-Glass event.
+            </p>
+
+            {documents.filter(d => Boolean(d.is_emergency_eligible ?? (d as any).emergency_eligible ?? (d as any).isEmergencyEligible)).length === 0 ? (
+              <div style={{
+                padding: 16,
+                borderRadius: 12,
+                backgroundColor: colors.surface,
+                border: `1px dashed ${colors.surfaceBorder}`,
+                textAlign: 'center',
+              }}>
+                <FileText size={28} color={colors.textMuted} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
+                <div style={{ fontSize: 12, fontWeight: 600, color: colors.text }}>No Emergency Documents Configured</div>
+                <div style={{ fontSize: 11, color: colors.textMuted, marginTop: 4 }}>
+                  Mark health insurance, ID cards, or medical records for emergency access below or from My Vault.
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {documents.filter(d => Boolean(d.is_emergency_eligible ?? (d as any).emergency_eligible ?? (d as any).isEmergencyEligible)).map(doc => (
+                  <div
+                    key={doc.id}
+                    style={{
+                      padding: 12,
+                      borderRadius: 12,
+                      backgroundColor: colors.surface,
+                      border: `1px solid ${colors.surfaceBorder}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 10,
+                    }}
+                  >
+                    <div
+                      onClick={() => onOpenDocument(doc)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, cursor: 'pointer' }}
+                    >
+                      <div style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 8,
+                        backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                        border: '1px solid rgba(239, 68, 68, 0.25)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}>
+                        <ShieldAlert size={18} color={colors.danger} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: colors.text,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}>
+                          {doc.title}
+                        </div>
+                        <div style={{ fontSize: 11, color: colors.textMuted, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <span>{doc.category || 'Emergency'}</span>
+                          {doc.doc_number && <span>• {doc.doc_number}</span>}
+                          {doc.expiry_date && <span>• Exp: {doc.expiry_date}</span>}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <button
+                        onClick={() => onOpenDocument(doc)}
+                        style={{
+                          padding: '6px 10px',
+                          borderRadius: 8,
+                          backgroundColor: colors.surfaceCard,
+                          border: `1px solid ${colors.surfaceBorder}`,
+                          color: colors.text,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
+                      >
+                        <Eye size={12} />
+                        <span>View</span>
+                      </button>
+                      <button
+                        onClick={() => handleToggleEmergencyDoc(doc, false)}
+                        title="Remove from Emergency Vault"
+                        style={{
+                          padding: '6px 8px',
+                          borderRadius: 8,
+                          backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                          border: '1px solid rgba(239, 68, 68, 0.2)',
+                          color: colors.danger,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Quick-Add other personal documents */}
+            {documents.filter(d => !d.is_emergency_eligible && !(d as any).emergency_eligible && !(d as any).isEmergencyEligible).length > 0 && (
+              <details style={{ marginTop: 12 }}>
+                <summary style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: colors.accentLight,
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                }}>
+                  + Add more documents to Emergency Vault
+                </summary>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8, maxHeight: 180, overflowY: 'auto' }}>
+                  {documents
+                    .filter(d => !d.is_emergency_eligible && !(d as any).emergency_eligible && !(d as any).isEmergencyEligible)
+                    .map(d => (
+                      <div
+                        key={d.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '6px 10px',
+                          borderRadius: 8,
+                          backgroundColor: colors.surface,
+                          border: `1px solid ${colors.surfaceBorder}`,
+                        }}
+                      >
+                        <span style={{ fontSize: 12, color: colors.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {d.title}
+                        </span>
+                        <button
+                          onClick={() => handleToggleEmergencyDoc(d, true)}
+                          style={{
+                            padding: '4px 8px',
+                            borderRadius: 6,
+                            backgroundColor: colors.accent,
+                            color: '#FFF',
+                            border: 'none',
+                            fontSize: 11,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Enable Emergency
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              </details>
+            )}
           </div>
         </div>
       )}

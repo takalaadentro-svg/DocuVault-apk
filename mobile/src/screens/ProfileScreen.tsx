@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { 
   User, Shield, Moon, Sun, Fingerprint, Lock, 
   LogOut, KeyRound, Check, AlertCircle, FileText,
-  Bell, Smartphone, Send, QrCode, ArrowRight, RefreshCw
+  Bell, Smartphone, Send, QrCode, ArrowRight, RefreshCw, Mail
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { api } from '../services/api';
 import { AuditLogItem, PhoneTransferPairing } from '../types';
+import { showLocalNotification, initializePushNotifications } from '../services/pushNotifications';
 
 interface ProfileScreenProps {
   onRefreshAll: () => void;
@@ -23,6 +24,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) =>
   const [newPassword, setNewPassword] = useState('');
   const [passwordMsg, setPasswordMsg] = useState<{ text: string; isError: boolean } | null>(null);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [resetViaOtp, setResetViaOtp] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
 
   // Quick PIN states
   const [showQuickPin, setShowQuickPin] = useState(false);
@@ -99,7 +104,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) =>
     }
   };
 
-  const handleSaveNotifPrefs = (key?: 'inApp' | 'pushFcm' | 'email' | 'smsWhatsapp', nextVal?: boolean) => {
+  const handleSaveNotifPrefs = async (key?: 'inApp' | 'pushFcm' | 'email' | 'smsWhatsapp', nextVal?: boolean) => {
     try {
       const current = {
         inApp: key === 'inApp' ? nextVal : notifInApp,
@@ -108,9 +113,46 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) =>
         smsWhatsapp: key === 'smsWhatsapp' ? nextVal : notifSmsWhatsapp,
       };
       localStorage.setItem('docuvault_notif_prefs', JSON.stringify(current));
+
+      if (key === 'pushFcm' && nextVal) {
+        await initializePushNotifications();
+      }
     } catch (e) {}
     setNotifSavedMsg(true);
     setTimeout(() => setNotifSavedMsg(false), 2000);
+  };
+
+  const handleTestNotification = async () => {
+    try {
+      await showLocalNotification(
+        '⚠️ Document Expiry Notice (Test)',
+        'Vehicle Insurance expires in 5 days! Please prepare renewal documents.'
+      );
+      try {
+        await api.checkExpiry();
+      } catch (_) {}
+      alert('Test notification successfully dispatched to your phone!');
+    } catch (e: any) {
+      alert('Notification alert: ' + (e?.message || 'Check phone notification permissions'));
+    }
+  };
+
+  const handleSendOtpForPassword = async () => {
+    if (!user?.email) {
+      setPasswordMsg({ text: 'No verified email linked to account', isError: true });
+      return;
+    }
+    setIsSendingOtp(true);
+    setPasswordMsg(null);
+    try {
+      await api.sendOtp(user.email, 'PASSWORD_CHANGE');
+      setOtpSent(true);
+      setPasswordMsg({ text: `Verification code sent to ${user.email}`, isError: false });
+    } catch (err: any) {
+      setPasswordMsg({ text: err.message || 'Failed to send OTP code', isError: true });
+    } finally {
+      setIsSendingOtp(false);
+    }
   };
 
   const handleSetQuickPin = async (e: React.FormEvent) => {
@@ -161,13 +203,25 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) =>
     setIsChangingPassword(true);
     setPasswordMsg(null);
     try {
-      await api.changePassword({ old_password: oldPassword, new_password: newPassword });
+      if (resetViaOtp) {
+        if (!otpCode || otpCode.trim().length !== 6) {
+          setPasswordMsg({ text: 'Please enter the 6-digit code sent to your email', isError: true });
+          setIsChangingPassword(false);
+          return;
+        }
+        await api.changePassword({ new_password: newPassword, otp: otpCode.trim() });
+      } else {
+        await api.changePassword({ old_password: oldPassword, new_password: newPassword });
+      }
       setPasswordMsg({ text: 'Password successfully updated!', isError: false });
       setOldPassword('');
       setNewPassword('');
+      setOtpCode('');
+      setOtpSent(false);
+      setResetViaOtp(false);
       setTimeout(() => setShowChangePassword(false), 2000);
     } catch (err: any) {
-      setPasswordMsg({ text: err.message || 'Failed to update password. Verify current password.', isError: true });
+      setPasswordMsg({ text: err.message || 'Failed to update password. Verify current password or use OTP reset.', isError: true });
     } finally {
       setIsChangingPassword(false);
     }
@@ -441,47 +495,173 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) =>
             backgroundColor: colors.surface,
             display: 'flex',
             flexDirection: 'column',
-            gap: 10,
+            gap: 12,
           }}>
+            {/* Mode Toggle: Current Password vs Email OTP */}
+            <div style={{
+              display: 'flex',
+              borderRadius: 8,
+              backgroundColor: colors.surfaceCard,
+              padding: 2,
+              border: `1px solid ${colors.surfaceBorder}`,
+            }}>
+              <button
+                type="button"
+                onClick={() => { setResetViaOtp(false); setPasswordMsg(null); }}
+                style={{
+                  flex: 1,
+                  padding: '6px 10px',
+                  borderRadius: 6,
+                  border: 'none',
+                  backgroundColor: !resetViaOtp ? colors.accent : 'transparent',
+                  color: !resetViaOtp ? '#FFF' : colors.textMuted,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Current Password
+              </button>
+              <button
+                type="button"
+                onClick={() => { setResetViaOtp(true); setPasswordMsg(null); }}
+                style={{
+                  flex: 1,
+                  padding: '6px 10px',
+                  borderRadius: 6,
+                  border: 'none',
+                  backgroundColor: resetViaOtp ? colors.accent : 'transparent',
+                  color: resetViaOtp ? '#FFF' : colors.textMuted,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Reset via Email OTP
+              </button>
+            </div>
+
             {passwordMsg && (
               <div style={{
                 fontSize: 12,
                 color: passwordMsg.isError ? colors.danger : colors.success,
+                padding: '8px 10px',
+                borderRadius: 6,
+                backgroundColor: passwordMsg.isError ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                border: `1px solid ${passwordMsg.isError ? 'rgba(239, 68, 68, 0.25)' : 'rgba(16, 185, 129, 0.25)'}`,
               }}>
                 {passwordMsg.text}
               </div>
             )}
-            <input
-              type="password"
-              placeholder="Current Password"
-              required
-              value={oldPassword}
-              onChange={e => setOldPassword(e.target.value)}
-              style={{
-                padding: '8px 12px',
-                borderRadius: 8,
-                backgroundColor: colors.surfaceCard,
-                border: `1px solid ${colors.surfaceBorder}`,
-                color: colors.text,
-                fontSize: 13,
-              }}
-            />
-            <input
-              type="password"
-              placeholder="New Password (min 6 characters)"
-              required
-              minLength={6}
-              value={newPassword}
-              onChange={e => setNewPassword(e.target.value)}
-              style={{
-                padding: '8px 12px',
-                borderRadius: 8,
-                backgroundColor: colors.surfaceCard,
-                border: `1px solid ${colors.surfaceBorder}`,
-                color: colors.text,
-                fontSize: 13,
-              }}
-            />
+
+            {!resetViaOtp ? (
+              <>
+                <input
+                  type="password"
+                  placeholder="Current Password"
+                  required
+                  value={oldPassword}
+                  onChange={e => setOldPassword(e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    backgroundColor: colors.surfaceCard,
+                    border: `1px solid ${colors.surfaceBorder}`,
+                    color: colors.text,
+                    fontSize: 13,
+                  }}
+                />
+                <input
+                  type="password"
+                  placeholder="New Password (min 6 characters)"
+                  required
+                  minLength={6}
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    backgroundColor: colors.surfaceCard,
+                    border: `1px solid ${colors.surfaceBorder}`,
+                    color: colors.text,
+                    fontSize: 13,
+                  }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    onClick={() => { setResetViaOtp(true); handleSendOtpForPassword(); }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: colors.accentLight,
+                      fontSize: 11,
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    Forgot current password? Reset with OTP
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    type="text"
+                    placeholder="6-digit verification code"
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={e => setOtpCode(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      backgroundColor: colors.surfaceCard,
+                      border: `1px solid ${colors.surfaceBorder}`,
+                      color: colors.text,
+                      fontSize: 13,
+                      letterSpacing: 2,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSendOtpForPassword}
+                    disabled={isSendingOtp}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      backgroundColor: colors.surfaceCard,
+                      border: `1px solid ${colors.surfaceBorder}`,
+                      color: colors.accentLight,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {isSendingOtp ? 'Sending...' : otpSent ? 'Resend OTP' : 'Send OTP'}
+                  </button>
+                </div>
+                <input
+                  type="password"
+                  placeholder="New Password (min 6 characters)"
+                  required
+                  minLength={6}
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    backgroundColor: colors.surfaceCard,
+                    border: `1px solid ${colors.surfaceBorder}`,
+                    color: colors.text,
+                    fontSize: 13,
+                  }}
+                />
+              </>
+            )}
+
             <button
               type="submit"
               disabled={isChangingPassword}
@@ -496,7 +676,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) =>
                 cursor: 'pointer',
               }}
             >
-              {isChangingPassword ? 'Updating...' : 'Save New Password'}
+              {isChangingPassword ? 'Updating...' : resetViaOtp ? 'Verify OTP & Set Password' : 'Save New Password'}
             </button>
           </form>
         )}
@@ -558,6 +738,39 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onRefreshAll }) =>
               />
             </div>
           ))}
+
+          {/* Test Notification Trigger */}
+          <div style={{
+            marginTop: 10,
+            paddingTop: 10,
+            borderTop: `1px dashed ${colors.surfaceBorder}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <div style={{ fontSize: 11, color: colors.textMuted }}>
+              Test device notification channels
+            </div>
+            <button
+              onClick={handleTestNotification}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 8,
+                backgroundColor: colors.surface,
+                border: `1px solid ${colors.surfaceBorder}`,
+                color: colors.accentLight,
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              <Bell size={12} />
+              <span>Send Test Expiry Alert</span>
+            </button>
+          </div>
         </div>
       </div>
 

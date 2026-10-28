@@ -24,6 +24,7 @@ import { FamilyInviteModal } from './components/FamilyInviteModal';
 import { EmergencyAccessModal } from './components/EmergencyAccessModal';
 import { BiometricLockOverlay } from './components/BiometricLockOverlay';
 import { AssistantModal } from './components/AssistantModal';
+import { initializePushNotifications, checkAndNotifyExpiries } from './services/pushNotifications';
 
 export const AppContent: React.FC = () => {
   const { user, isAuthenticated, isLoading: authLoading, isLocked } = useAuth();
@@ -81,6 +82,11 @@ export const AppContent: React.FC = () => {
     };
   }, []);
 
+  // Initialize push notification services on app mount
+  React.useEffect(() => {
+    initializePushNotifications();
+  }, []);
+
   // Queries with Real-time automatic updates (every 12 seconds)
   const { data: documents = [], refetch: refetchDocs } = useQuery<DocumentItem[]>({
     queryKey: ['documents'],
@@ -88,6 +94,13 @@ export const AppContent: React.FC = () => {
     enabled: isAuthenticated,
     refetchInterval: 12000,
   });
+
+  // Evaluate document expiries and dispatch native system notifications
+  React.useEffect(() => {
+    if (documents && documents.length > 0) {
+      checkAndNotifyExpiries(documents);
+    }
+  }, [documents]);
 
   const { data: stats = null, refetch: refetchStats } = useQuery<DashboardStats>({
     queryKey: ['dashboard_stats'],

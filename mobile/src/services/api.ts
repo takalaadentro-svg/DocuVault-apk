@@ -107,9 +107,9 @@ class ApiService {
         let errMessage = 'An error occurred';
         try {
           const errData = await response.json();
-          errMessage = errData.detail || errData.message || response.statusText;
+          errMessage = errData.detail || errData.error || errData.errors?.[0]?.defaultMessage || errData.message || response.statusText || 'An error occurred';
         } catch (_) {
-          errMessage = await response.text() || response.statusText;
+          errMessage = await response.text() || response.statusText || 'An error occurred';
         }
         throw new Error(errMessage);
       }
@@ -424,7 +424,7 @@ class ApiService {
     });
   }
 
-  async changePassword(data: { old_password?: string; new_password?: string }) {
+  async changePassword(data: { old_password?: string; new_password?: string; otp?: string }) {
     return this.request<{ message: string }>('/auth/change-password', {
       method: 'POST',
       body: JSON.stringify(data)

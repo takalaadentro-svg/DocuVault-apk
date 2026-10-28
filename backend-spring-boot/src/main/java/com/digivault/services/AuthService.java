@@ -132,10 +132,14 @@ public class AuthService {
     }
 
     public boolean verifyQuickPin(User user, String pin) {
-        if (user.getQuickPinHash() == null) {
-            throw new RuntimeException("No Quick PIN configured for this account");
+        if (user == null || pin == null) {
+            return false;
         }
-        return passwordEncoder.matches(pin, user.getQuickPinHash());
+        User fresh = userRepository.findById(user.getId()).orElse(user);
+        if (fresh.getQuickPinHash() == null || fresh.getQuickPinHash().isEmpty()) {
+            return false;
+        }
+        return passwordEncoder.matches(pin, fresh.getQuickPinHash());
     }
 
     public boolean toggleBiometric(User user, boolean enabled) {
@@ -220,16 +224,37 @@ public class AuthService {
     }
 
     public boolean changePassword(User user, String oldPassword, String newPassword) {
-        if (newPassword == null || newPassword.length() < 6) {
+        return changePassword(user, oldPassword, newPassword, null);
+    }
+
+    public boolean changePassword(User user, String oldPassword, String newPassword, String otp) {
+        if (newPassword == null || newPassword.trim().length() < 6) {
             throw new RuntimeException("New password must be at least 6 characters.");
         }
-        if (user.getPassword() != null && !user.getPassword().isEmpty()) {
-            if (oldPassword == null || !passwordEncoder.matches(oldPassword, user.getPassword())) {
-                throw new RuntimeException("Current password does not match.");
+        User fresh = userRepository.findById(user.getId()).orElse(user);
+
+        if (otp != null && !otp.trim().isEmpty()) {
+            boolean verified = false;
+            try {
+                verified = verifyOtp(fresh.getEmail(), otp.trim(), "PASSWORD_CHANGE");
+            } catch (Exception ex) {
+                try {
+                    verified = verifyOtp(fresh.getEmail(), otp.trim(), "PASSWORD_RESET");
+                } catch (Exception ignored) {
+                    throw ex;
+                }
+            }
+            if (!verified) {
+                throw new RuntimeException("Invalid or expired verification code.");
+            }
+        } else if (fresh.getPassword() != null && !fresh.getPassword().isEmpty()) {
+            if (oldPassword == null || !passwordEncoder.matches(oldPassword, fresh.getPassword())) {
+                throw new RuntimeException("Current password does not match. Please verify or use 'Reset with OTP'.");
             }
         }
-        user.setPassword(passwordEncoder.encode(newPassword));
-        userRepository.save(user);
+        fresh.setPassword(passwordEncoder.encode(newPassword.trim()));
+        fresh.setUpdatedAt(new Date());
+        userRepository.save(fresh);
         return true;
     }
 

@@ -90,3 +90,66 @@ export const showLocalNotification = async (title: string, body: string, id?: nu
     console.warn('Could not post local notification:', e);
   }
 };
+
+/**
+ * Automatically inspects vault documents and dispatches native local notifications
+ * for any document expired or expiring within 30 days.
+ */
+export const checkAndNotifyExpiries = async (documents: any[], forceImmediate = false): Promise<number> => {
+  if (!documents || documents.length === 0) return 0;
+
+  try {
+    const saved = localStorage.getItem('docuvault_notif_prefs');
+    if (saved) {
+      const prefs = JSON.parse(saved);
+      if (prefs.inApp === false && prefs.pushFcm === false) {
+        return 0;
+      }
+    }
+  } catch (_) {}
+
+  const lastCheck = sessionStorage.getItem('docuvault_last_expiry_notified');
+  const now = Date.now();
+  if (!forceImmediate && lastCheck && now - parseInt(lastCheck, 10) < 10 * 60 * 1000) {
+    return 0;
+  }
+
+  sessionStorage.setItem('docuvault_last_expiry_notified', String(now));
+
+  let count = 0;
+  for (const doc of documents) {
+    if (!doc.expiry_date) continue;
+    const expTime = new Date(doc.expiry_date).getTime();
+    if (isNaN(expTime)) continue;
+
+    const daysLeft = Math.ceil((expTime - now) / (1000 * 60 * 60 * 24));
+    let notifTitle = '';
+    let notifBody = '';
+
+    if (daysLeft < 0) {
+      notifTitle = `⚠️ Critical: "${doc.title}" is EXPIRED`;
+      notifBody = `Expired on ${doc.expiry_date} (${Math.abs(daysLeft)} days ago). Immediate renewal required.`;
+    } else if (daysLeft === 0) {
+      notifTitle = `🚨 Urgent: "${doc.title}" expires TODAY`;
+      notifBody = `Expires today (${doc.expiry_date})! Please renew immediately.`;
+    } else if (daysLeft <= 7) {
+      notifTitle = `⏰ Urgent Expiry: "${doc.title}" (${daysLeft} days left)`;
+      notifBody = `Will expire on ${doc.expiry_date}. Please prepare renewal documents.`;
+    } else if (daysLeft <= 30) {
+      notifTitle = `📅 Expiry Notice: "${doc.title}" (${daysLeft} days left)`;
+      notifBody = `Will expire on ${doc.expiry_date}. Check renewal requirements.`;
+    }
+
+    if (notifTitle) {
+      count++;
+      let id = 0;
+      const str = String(doc.id || doc.title || count);
+      for (let i = 0; i < str.length; i++) {
+        id = ((id << 5) - id + str.charCodeAt(i)) & 0x7fffffff;
+      }
+      await showLocalNotification(notifTitle, notifBody, id || (1000 + count));
+    }
+  }
+
+  return count;
+};
