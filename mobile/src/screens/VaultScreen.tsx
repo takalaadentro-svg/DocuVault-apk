@@ -448,7 +448,7 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
       {/* Sort options strip */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
         <span style={{ color: colors.textMuted }}>
-          Showing {filteredDocs.length} of {documents.length} documents
+          Showing {filteredDocs.length} of {combinedDocs.length} documents
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <ArrowUpDown size={14} color={colors.textMuted} />

@@ -131,6 +131,7 @@ export interface FamilyGroup {
   created_at: string;
   members: FamilyMember[];
   invitations: FamilyInvitation[];
+  documents?: DocumentItem[];
 }
 
 export interface EmergencyContact {

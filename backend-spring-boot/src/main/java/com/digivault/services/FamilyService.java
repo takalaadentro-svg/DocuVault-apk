@@ -3,6 +3,7 @@ package com.digivault.services;
 import java.util.concurrent.CompletableFuture;
 
 import com.digivault.models.*;
+import com.digivault.payload.DocumentDto;
 import com.digivault.payload.FamilyDto.*;
 import com.digivault.repositories.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +32,13 @@ public class FamilyService {
 
     @Autowired(required = false)
     private NotificationRepository notificationRepository;
+
+    @Autowired(required = false)
+    private DocumentRepository documentRepository;
+
+    @Autowired(required = false)
+    @org.springframework.context.annotation.Lazy
+    private DocumentService documentService;
 
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(FamilyService.class);
 
@@ -325,6 +333,59 @@ public class FamilyService {
         }).collect(Collectors.toList());
 
         details.setMembers(memberInfos);
+
+        List<String> memberUserIds = members.stream()
+                .map(FamilyMember::getUserId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+
+        if (group.getOwnerId() != null && !memberUserIds.contains(group.getOwnerId())) {
+            memberUserIds.add(group.getOwnerId());
+        }
+
+        if (documentRepository != null && !memberUserIds.isEmpty()) {
+            try {
+                List<DocumentRecord> docs = documentRepository.findByUserIdInAndIsFamilyVault(memberUserIds, true);
+                List<DocumentDto.DocumentResponse> docResponses = docs.stream().map(d -> {
+                    DocumentDto.DocumentResponse r = (documentService != null) ? documentService.toResponse(d) : toDocumentResponseFallback(d);
+                    if (userRepository != null && d.getUserId() != null) {
+                        userRepository.findById(d.getUserId()).ifPresent(u -> {
+                            if (r.getHolderName() == null || r.getHolderName().isBlank()) {
+                                r.setHolderName(u.getFullName());
+                            }
+                            if (r.getIssuer() == null || r.getIssuer().isBlank() || "Personal".equalsIgnoreCase(r.getIssuer()) || "Personal Record".equalsIgnoreCase(r.getIssuer())) {
+                                r.setIssuer("Shared by " + u.getFullName());
+                            }
+                        });
+                    }
+                    return r;
+                }).collect(Collectors.toList());
+                details.setDocuments(docResponses);
+            } catch (Exception ex) {
+                logger.warn("Could not attach family documents to group details: {}", ex.getMessage());
+            }
+        }
+
         return details;
+    }
+
+    private DocumentDto.DocumentResponse toDocumentResponseFallback(DocumentRecord d) {
+        DocumentDto.DocumentResponse r = new DocumentDto.DocumentResponse();
+        r.setId(d.getId());
+        r.setUserId(d.getUserId());
+        r.setTitle(d.getTitle());
+        r.setCategory(d.getCategory());
+        r.setDocType(d.getDocType());
+        r.setSubtype(d.getSubtype());
+        r.setIssuer(d.getIssuer());
+        r.setHolderName(d.getHolderName());
+        r.setDocNumber(d.getDocNumber());
+        r.setOriginalFilename(d.getOriginalFilename());
+        r.setFileSize(d.getFileSize());
+        r.setMimeType(d.getMimeType());
+        r.setFamilyVault(d.isFamilyVault());
+        r.setCreatedAt(d.getCreatedAt());
+        r.setUpdatedAt(d.getUpdatedAt());
+        return r;
     }
 }

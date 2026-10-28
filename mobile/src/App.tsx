@@ -116,14 +116,51 @@ export const AppContent: React.FC = () => {
   });
 
   const { data: sharedWithMe = [], refetch: refetchSharedWithMe } = useQuery<DocumentItem[]>({
-    queryKey: ['shared_with_me'],
-    queryFn: () => api.getSharedWithMe(),
+    queryKey: ['shared_with_me', families],
+    queryFn: async () => {
+      const fromApi = await api.getSharedWithMe();
+      const fromFamilies = (families || []).flatMap(f => (f as any).documents || []);
+      const mergedMap = new Map<string, DocumentItem>();
+      (fromApi || []).forEach(d => {
+        if (d && d.id) mergedMap.set(d.id, d);
+      });
+      (fromFamilies || []).forEach(d => {
+        if (d && d.id && d.user_id !== user?.id && (d as any).userId !== user?.id && !mergedMap.has(d.id)) {
+          mergedMap.set(d.id, {
+            ...d,
+            is_family_vault: true,
+            family_vault: true,
+            isFamilyVault: true,
+          });
+        }
+      });
+      return Array.from(mergedMap.values());
+    },
     enabled: isAuthenticated,
   });
 
   const { data: sharedByMe = [], refetch: refetchSharedByMe } = useQuery<DocumentItem[]>({
-    queryKey: ['shared_by_me'],
-    queryFn: () => api.getSharedByMe(),
+    queryKey: ['shared_by_me', families, documents],
+    queryFn: async () => {
+      const fromApi = await api.getSharedByMe();
+      const fromFamilies = (families || []).flatMap(f => (f as any).documents || []);
+      const fromDocs = (documents || []).filter(d => Boolean(d.is_family_vault || (d as any).family_vault || (d as any).isFamilyVault));
+      const mergedMap = new Map<string, DocumentItem>();
+      (fromApi || []).forEach(d => {
+        if (d && d.id) mergedMap.set(d.id, d);
+      });
+      (fromDocs || []).forEach(d => {
+        if (d && d.id && !mergedMap.has(d.id)) {
+          mergedMap.set(d.id, d);
+        }
+      });
+      (fromFamilies || []).forEach(d => {
+        if (d && d.id && (d.user_id === user?.id || (d as any).userId === user?.id) && !mergedMap.has(d.id)) {
+          mergedMap.set(d.id, d);
+        }
+      });
+      return Array.from(mergedMap.values());
+    },
     enabled: isAuthenticated,
   });
 

@@ -9,6 +9,7 @@ services:
     dockerContext: ./backend-spring-boot
     plan: free
     region: oregon
+    autoDeploy: true
     healthCheckPath: /health
     envVars:
       - key: SPRING_DATA_MONGODB_URI
@@ -52,6 +53,7 @@ services:
     dockerContext: ./backend-spring-boot/ocr-service-python
     plan: free
     region: oregon
+    autoDeploy: true
     healthCheckPath: /health
 
   # ---------------------------------------------------------------------------
@@ -60,6 +62,7 @@ services:
   - type: web
     name: docuvault-frontend
     env: static
+    autoDeploy: true
     rootDir: mobile
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist

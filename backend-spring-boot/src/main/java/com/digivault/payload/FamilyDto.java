@@ -1,5 +1,6 @@
 package com.digivault.payload;
 
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import com.fasterxml.jackson.annotation.JsonAlias;
@@ -81,6 +82,7 @@ public class FamilyDto {
         private Date createdAt;
 
         private List<MemberInfo> members;
+        private List<DocumentDto.DocumentResponse> documents = new ArrayList<>();
 
         public FamilyGroupDetails() {}
 
@@ -98,5 +100,8 @@ public class FamilyDto {
 
         public List<MemberInfo> getMembers() { return members; }
         public void setMembers(List<MemberInfo> members) { this.members = members; }
+
+        public List<DocumentDto.DocumentResponse> getDocuments() { return documents; }
+        public void setDocuments(List<DocumentDto.DocumentResponse> documents) { this.documents = documents; }
     }
 }

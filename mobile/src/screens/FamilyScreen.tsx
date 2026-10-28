@@ -81,6 +81,13 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
     return families[0];
   }, [families, selectedFamilyId, user?.id]);
 
+  const familySharedDocs = React.useMemo(() => {
+    if (sharedWithMe && sharedWithMe.length > 0) return sharedWithMe;
+    const groupDocs = primaryFamily?.documents || [];
+    const othersDocs = groupDocs.filter((d: any) => d.user_id !== user?.id && (d as any).userId !== user?.id);
+    return othersDocs.length > 0 ? othersDocs : groupDocs;
+  }, [sharedWithMe, primaryFamily?.documents, user?.id]);
+
     // Auto-accept invitation from email deep link if token is present
   React.useEffect(() => {
     const pendingToken = localStorage.getItem('pending_invite_token');
@@ -269,7 +276,7 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
       }}>
         {[
           { id: 'members', label: 'Members' },
-          { id: 'shared_with_me', label: `Shared (${sharedWithMe.length})` },
+          { id: 'shared_with_me', label: `Shared (${familySharedDocs.length})` },
           { id: 'shared_by_me', label: 'My Shares' },
           { id: 'emergency', label: 'Emergency' },
         ].map(tab => (
@@ -459,7 +466,7 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
               </div>
 
               {/* Shared Documents Quick Access Strip */}
-              {sharedWithMe.length > 0 && (
+              {familySharedDocs.length > 0 && (
                 <div
                   onClick={() => setActiveTab('shared_with_me')}
                   style={{
@@ -477,7 +484,7 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
                     <FileText size={18} color="#3B82F6" />
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>
-                        {sharedWithMe.length} Document{sharedWithMe.length > 1 ? 's' : ''} Available in this Vault
+                        {familySharedDocs.length} Document{familySharedDocs.length > 1 ? 's' : ''} Available in this Vault
                       </div>
                       <div style={{ fontSize: 11, color: colors.textMuted }}>
                         Tap to view documents shared by family members
@@ -660,8 +667,8 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
       {/* Tab: Shared with Me */}
       {activeTab === 'shared_with_me' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {sharedWithMe.length > 0 ? (
-            sharedWithMe.map(doc => (
+          {familySharedDocs.length > 0 ? (
+            familySharedDocs.map(doc => (
               <div
                 key={doc.id}
                 onClick={() => onOpenDocument(doc)}

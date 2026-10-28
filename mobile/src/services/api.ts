@@ -730,6 +730,14 @@ class ApiService {
               status: m.status || 'ACTIVE',
             }))
           : [],
+        documents: Array.isArray(g.documents)
+          ? g.documents.map((d: any) => ({
+              ...this.normalizeDocument(d),
+              is_family_vault: true,
+              family_vault: true,
+              isFamilyVault: true,
+            }))
+          : [],
       }));
     } catch (e) {
       return [];
