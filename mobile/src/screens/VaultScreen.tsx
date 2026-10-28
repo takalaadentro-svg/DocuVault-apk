@@ -511,190 +511,53 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
                 key={doc.id}
                 onClick={() => onOpenDocument(doc)}
                 style={{
-                  padding: 16,
-                  borderRadius: 14,
+                  padding: '14px 16px',
+                  borderRadius: 16,
                   backgroundColor: colors.surfaceCard,
                   border: `1px solid ${colors.surfaceBorder}`,
                   cursor: 'pointer',
                   display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 12,
+                  flexDirection: 'column',
+                  gap: 10,
                   transition: 'all 0.15s ease',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, overflow: 'hidden' }}>
-                  <div style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 12,
-                    backgroundColor: doc.is_family_vault ? 'rgba(59, 130, 246, 0.15)' : 'rgba(13, 148, 136, 0.12)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: doc.is_family_vault ? '#60A5FA' : colors.accentLight,
-                    flexShrink: 0,
-                  }}>
-                    {doc.is_family_vault ? <Users size={22} /> : <FileText size={22} />}
-                  </div>
-                  <div style={{ overflow: 'hidden' }}>
+                {/* Top Row: Icon, Title & Category, QR Action */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
                     <div style={{
-                      fontSize: 14,
-                      fontWeight: 700,
-                      color: colors.text,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
+                      width: 42,
+                      height: 42,
+                      borderRadius: 12,
+                      backgroundColor: doc.is_family_vault ? 'rgba(59, 130, 246, 0.15)' : 'rgba(13, 148, 136, 0.12)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: doc.is_family_vault ? '#60A5FA' : colors.accentLight,
+                      flexShrink: 0,
                     }}>
-                      {doc.title}
+                      {doc.is_family_vault ? <Users size={22} /> : <FileText size={22} />}
                     </div>
-                    <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <span>{doc.category}</span>
-                      <span>•</span>
-                      <span>{doc.issuer || 'Personal Record'}</span>
-                    </div>
-
-                    {/* Metadata tags strip: DNA badge, Locker type, OCR badge */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
-                      <span style={{
-                        padding: '1px 6px',
-                        borderRadius: 4,
-                        fontSize: 10,
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{
+                        fontSize: 14,
                         fontWeight: 700,
-                        backgroundColor: doc.is_family_vault ? 'rgba(59, 130, 246, 0.12)' : 'rgba(13, 148, 136, 0.12)',
-                        color: doc.is_family_vault ? '#3B82F6' : colors.accentLight,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 3
+                        color: colors.text,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
                       }}>
-                        {doc.is_family_vault ? <Users size={10} /> : <Lock size={10} />}
-                        {doc.is_family_vault ? 'Family Locker' : 'Personal'}
-                      </span>
-
-                      {doc.sha256_hash && (
-                        <span style={{
-                          padding: '1px 6px',
-                          borderRadius: 4,
-                          fontSize: 10,
-                          fontWeight: 600,
-                          backgroundColor: 'rgba(16, 185, 129, 0.12)',
-                          color: '#10B981',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 3
-                        }}>
-                          <Dna size={10} />
-                          <span>DNA {doc.sha256_hash.slice(0, 6)}</span>
-                        </span>
-                      )}
-
-                      {doc.is_offline_available && (
-                        <span style={{
-                          padding: '1px 5px',
-                          borderRadius: 4,
-                          fontSize: 9,
-                          fontWeight: 700,
-                          backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                          color: '#10B981',
-                        }}>
-                          Offline
-                        </span>
-                      )}
-
-                      {doc.holder_name && (
-                        <span style={{
-                          padding: '1px 5px',
-                          borderRadius: 4,
-                          fontSize: 9,
-                          fontWeight: 600,
-                          backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                          color: colors.textMuted,
-                        }}>
-                          {doc.holder_name}
-                        </span>
-                      )}
-
-                      {doc.ocr_text && (
-                        <span style={{
-                          padding: '1px 5px',
-                          borderRadius: 4,
-                          fontSize: 9,
-                          fontWeight: 700,
-                          backgroundColor: 'rgba(139, 92, 246, 0.12)',
-                          color: '#8B5CF6'
-                        }}>
-                          OCR
-                        </span>
-                      )}
-
-                      {doc.expiry_date && (
-                        <span style={{ fontSize: 10, color: colors.textMuted, display: 'flex', alignItems: 'center', gap: 3 }}>
-                          <Calendar size={10} />
-                          <span>{doc.expiry_date}</span>
-                        </span>
-                      )}
+                        {doc.title}
+                      </div>
+                      <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <span>{doc.category}</span>
+                        <span style={{ margin: '0 5px' }}>•</span>
+                        <span>{doc.issuer || 'Personal Record'}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                  {expiryBadge}
-                  {doc.is_emergency_eligible && (
-                    <span style={{
-                      padding: '2px 6px',
-                      borderRadius: 4,
-                      backgroundColor: 'rgba(239, 68, 68, 0.12)',
-                      color: colors.danger,
-                      fontSize: 10,
-                      fontWeight: 700,
-                    }}>
-                      EMERGENCY
-                    </span>
-                  )}
-                  {(doc as any)._isSharedWithMe ? (
-                    <span
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        padding: '6px 9px',
-                        borderRadius: 8,
-                        backgroundColor: 'rgba(59, 130, 246, 0.15)',
-                        border: '1px solid rgba(59, 130, 246, 0.3)',
-                        color: '#60A5FA',
-                        fontSize: 10,
-                        fontWeight: 700,
-                      }}
-                    >
-                      <Users size={12} color="#60A5FA" />
-                      <span>Shared with You</span>
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={(e) => handleToggleFamilyAccess(e, doc)}
-                      disabled={togglingDocId === doc.id}
-                      title={isFamilyDoc(doc) ? "In Family Locker (Tap to remove access)" : "Personal Locker (Tap to grant family access)"}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        padding: '6px 9px',
-                        borderRadius: 8,
-                        backgroundColor: isFamilyDoc(doc) ? 'rgba(59, 130, 246, 0.18)' : 'rgba(255, 255, 255, 0.05)',
-                        border: `1px solid ${isFamilyDoc(doc) ? '#3B82F6' : colors.surfaceBorder}`,
-                        color: isFamilyDoc(doc) ? '#60A5FA' : colors.textMuted,
-                        fontSize: 11,
-                        fontWeight: 700,
-                        cursor: togglingDocId === doc.id ? 'wait' : 'pointer',
-                        transition: 'all 0.15s ease',
-                      }}
-                    >
-                      {isFamilyDoc(doc) ? <Users size={13} color="#60A5FA" /> : <Lock size={13} color={colors.textMuted} />}
-                      <span style={{ fontSize: 10 }}>{isFamilyDoc(doc) ? 'Family' : 'Personal'}</span>
-                    </button>
-                  )}
-
+                  {/* QR Share button */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -712,10 +575,147 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
                       justifyContent: 'center',
                       color: colors.accentLight,
                       cursor: 'pointer',
+                      flexShrink: 0,
                     }}
                   >
                     <QrCode size={16} />
                   </button>
+                </div>
+
+                {/* Bottom Row: Metadata Badges on left, Locker Toggle Button / Shared Badge on right */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  paddingTop: 8,
+                  borderTop: `1px solid ${colors.surfaceBorder}`,
+                  minWidth: 0,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
+                    {expiryBadge}
+                    {doc.is_emergency_eligible && (
+                      <span style={{
+                        padding: '2px 6px',
+                        borderRadius: 4,
+                        backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                        color: colors.danger,
+                        fontSize: 10,
+                        fontWeight: 700,
+                      }}>
+                        EMERGENCY
+                      </span>
+                    )}
+
+                    {doc.sha256_hash && (
+                      <span style={{
+                        padding: '1px 6px',
+                        borderRadius: 4,
+                        fontSize: 10,
+                        fontWeight: 600,
+                        backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                        color: '#10B981',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 3
+                      }}>
+                        <Dna size={10} />
+                        <span>DNA {doc.sha256_hash.slice(0, 6)}</span>
+                      </span>
+                    )}
+
+                    {doc.is_offline_available && (
+                      <span style={{
+                        padding: '1px 5px',
+                        borderRadius: 4,
+                        fontSize: 9,
+                        fontWeight: 700,
+                        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                        color: '#10B981',
+                      }}>
+                        Offline
+                      </span>
+                    )}
+
+                    {doc.holder_name && (
+                      <span style={{
+                        padding: '1px 5px',
+                        borderRadius: 4,
+                        fontSize: 9,
+                        fontWeight: 600,
+                        backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                        color: colors.textMuted,
+                      }}>
+                        {doc.holder_name}
+                      </span>
+                    )}
+
+                    {doc.ocr_text && (
+                      <span style={{
+                        padding: '1px 5px',
+                        borderRadius: 4,
+                        fontSize: 9,
+                        fontWeight: 700,
+                        backgroundColor: 'rgba(139, 92, 246, 0.12)',
+                        color: '#8B5CF6'
+                      }}>
+                        OCR
+                      </span>
+                    )}
+
+                    {doc.expiry_date && (
+                      <span style={{ fontSize: 10, color: colors.textMuted, display: 'flex', alignItems: 'center', gap: 3 }}>
+                        <Calendar size={10} />
+                        <span>{doc.expiry_date}</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ flexShrink: 0 }}>
+                    {(doc as any)._isSharedWithMe ? (
+                      <span
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: '4px 8px',
+                          borderRadius: 8,
+                          backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                          border: '1px solid rgba(59, 130, 246, 0.3)',
+                          color: '#60A5FA',
+                          fontSize: 10,
+                          fontWeight: 700,
+                        }}
+                      >
+                        <Users size={12} color="#60A5FA" />
+                        <span>Shared</span>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => handleToggleFamilyAccess(e, doc)}
+                        disabled={togglingDocId === doc.id}
+                        title={isFamilyDoc(doc) ? "In Family Locker (Tap to move to Personal)" : "Personal Locker (Tap to share to Family)"}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: '5px 9px',
+                          borderRadius: 8,
+                          backgroundColor: isFamilyDoc(doc) ? 'rgba(59, 130, 246, 0.18)' : 'rgba(255, 255, 255, 0.05)',
+                          border: `1px solid ${isFamilyDoc(doc) ? '#3B82F6' : colors.surfaceBorder}`,
+                          color: isFamilyDoc(doc) ? '#60A5FA' : colors.textMuted,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: togglingDocId === doc.id ? 'wait' : 'pointer',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        {isFamilyDoc(doc) ? <Users size={12} color="#60A5FA" /> : <Lock size={12} color={colors.textMuted} />}
+                        <span style={{ fontSize: 10 }}>{isFamilyDoc(doc) ? 'Family' : 'Personal'}</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             );
