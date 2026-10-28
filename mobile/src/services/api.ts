@@ -935,7 +935,24 @@ class ApiService {
     try {
       const res = await this.request<any[]>('/notifications/');
       if (Array.isArray(res)) {
-        return res.map(n => this.normalizeNotification(n));
+        return res
+          .map(n => this.normalizeNotification(n))
+          .filter(n => {
+            const title = (n.title || '').toLowerCase();
+            const msg = (n.message || '').toLowerCase();
+            if (
+              title.includes('health insurance expiry') ||
+              title.includes('passport expiry alert') ||
+              msg.includes('health insurance floater policy expires') ||
+              msg.includes('republic of india passport will expire')
+            ) {
+              return false;
+            }
+            if (!n.id || n.id === 'null' || n.id === 'None' || n.id === 'undefined') {
+              return false;
+            }
+            return true;
+          });
       }
       return [];
     } catch (e) {

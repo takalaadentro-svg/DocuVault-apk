@@ -209,7 +209,22 @@ export const AppContent: React.FC = () => {
     return <AuthScreen />;
   }
 
-  const unreadAlertsCount = notifications.filter(n => !n.is_read).length;
+  const isSampleNotification = (n: any) => {
+    const title = (n?.title || '').toLowerCase();
+    const msg = (n?.message || '').toLowerCase();
+    return (
+      title.includes('health insurance expiry') ||
+      title.includes('passport expiry alert') ||
+      msg.includes('floater policy') ||
+      msg.includes('republic of india passport') ||
+      !n?.id ||
+      n.id === 'null' ||
+      n.id === 'None' ||
+      n.id === 'undefined'
+    );
+  };
+
+  const unreadAlertsCount = notifications.filter(n => !n.is_read && !isSampleNotification(n)).length;
 
   return (
     <div style={{

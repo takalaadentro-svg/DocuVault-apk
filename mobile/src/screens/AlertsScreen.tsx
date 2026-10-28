@@ -54,8 +54,22 @@ export const AlertsScreen: React.FC<AlertsScreenProps> = ({
     })
     .sort((a, b) => (a.days ?? 9999) - (b.days ?? 9999));
 
-  // Purge/filter out orphaned notifications when documents list is loaded
+  // Purge/filter out orphaned and sample notifications
   const validNotifs = notifications.filter(n => {
+    const title = (n.title || '').toLowerCase();
+    const msg = (n.message || '').toLowerCase();
+    if (
+      title.includes('health insurance expiry') ||
+      title.includes('passport expiry alert') ||
+      msg.includes('floater policy') ||
+      msg.includes('republic of india passport will expire') ||
+      !n.id ||
+      n.id === 'null' ||
+      n.id === 'None' ||
+      n.id === 'undefined'
+    ) {
+      return false;
+    }
     if (documents.length > 0 && n.related_document_id) {
       const docExists = documents.some(d => d.id === n.related_document_id);
       if (!docExists) return false;

@@ -540,67 +540,6 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
                   );
                 })}
               </div>
-
-              {/* Family Document-Completeness Tracker */}
-              <div style={{
-                marginTop: 8,
-                padding: 16,
-                borderRadius: 16,
-                backgroundColor: colors.surfaceCard,
-                border: `1px solid ${colors.surfaceBorder}`,
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <ShieldCheck size={18} color={colors.accentLight} />
-                    <span style={{ fontSize: 13, fontWeight: 800, color: colors.text }}>
-                      Family Vault Completeness Tracker
-                    </span>
-                  </div>
-                  <span style={{
-                    fontSize: 12,
-                    fontWeight: 800,
-                    color: colors.success,
-                    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                    padding: '2px 8px',
-                    borderRadius: 12,
-                  }}>
-                    85% Protected
-                  </span>
-                </div>
-
-                <p style={{ fontSize: 11, color: colors.textMuted, margin: '0 0 12px 0' }}>
-                  Audits essential life records for all family vault members without exposing private document contents:
-                </p>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {[
-                    { label: 'Government Photo ID Proofs', count: `${primaryFamily.members?.length || 0}/${primaryFamily.members?.length || 0} Members`, complete: true },
-                    { label: 'Active Health Insurance Floater Cover', count: 'Protected (Policy Active)', complete: true },
-                    { label: 'Emergency Break-Glass Authorization', count: 'Configured', complete: true },
-                    { label: 'Property & Vehicle Registrations', count: '1 Pending Review', complete: false },
-                  ].map((item, idx) => (
-                    <div 
-                      key={idx}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '8px 10px',
-                        borderRadius: 8,
-                        backgroundColor: item.complete ? 'rgba(16, 185, 129, 0.08)' : 'rgba(245, 158, 11, 0.08)',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: colors.text }}>
-                        {item.complete ? <Check size={14} color={colors.success} /> : <AlertTriangle size={14} color="#F59E0B" />}
-                        <span>{item.label}</span>
-                      </div>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: item.complete ? colors.success : '#F59E0B' }}>
-                        {item.count}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
           ) : (
             /* No Family Vault Created Yet */
