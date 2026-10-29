@@ -1,4 +1,4 @@
-import { ClientOCRService } from './ocrService';
+import { ClientOCRService, sanitizeOcrText } from './ocrService';
 import { ClientRAGService } from './ragService';
 import { 
   User, DocumentItem, FamilyGroup, FamilyInvitation, 
@@ -264,11 +264,11 @@ class ApiService {
         return {
           ...localOcr,
           ...remoteOcr,
-          extracted_text: remoteOcr.extracted_text || localOcr.extracted_text,
-          holder_name: remoteOcr.holder_name || localOcr.holder_name,
-          doc_number: remoteOcr.doc_number || localOcr.doc_number,
-          dob: remoteOcr.dob || localOcr.dob,
-          expiry_date: remoteOcr.expiry_date || localOcr.expiry_date,
+          extracted_text: localOcr.extracted_text || sanitizeOcrText(remoteOcr.extracted_text),
+          holder_name: localOcr.holder_name || remoteOcr.holder_name,
+          doc_number: localOcr.doc_number || remoteOcr.doc_number,
+          dob: localOcr.dob || remoteOcr.dob,
+          expiry_date: localOcr.expiry_date || remoteOcr.expiry_date,
         };
       }
     } catch (e) {
@@ -335,6 +335,7 @@ class ApiService {
       userId: uid,
       holder_name: d.holder_name || d.holderName || '',
       doc_number: d.doc_number || d.docNumber || '',
+      ocr_text: sanitizeOcrText(d.ocr_text || d.ocrText || ''),
       file_format: d.file_format || d.fileFormat || (d.mimeType ? d.mimeType.split('/')[1] : ''),
       is_family_vault: isFam,
       family_vault: isFam,

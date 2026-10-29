@@ -200,6 +200,10 @@ public class DocumentDto {
 
         private String collectionName;
 
+        @JsonProperty("ocr_text")
+        @JsonAlias({"ocrText", "ocr_text"})
+        private String ocrText;
+
         public DocumentUpdateRequest() {}
 
         public String getTitle() { return title; }
@@ -253,6 +257,9 @@ public class DocumentDto {
 
         public String getCollectionName() { return collectionName; }
         public void setCollectionName(String collectionName) { this.collectionName = collectionName; }
+
+        public String getOcrText() { return ocrText; }
+        public void setOcrText(String ocrText) { this.ocrText = ocrText; }
     }
 
     public static class DocumentDnaResponse {
@@ -579,7 +586,7 @@ public class DocumentDto {
         public void setTotalDocumentsAnalyzed(int totalDocumentsAnalyzed) { this.totalDocumentsAnalyzed = totalDocumentsAnalyzed; }
 
         public boolean isConsistent() { return isConsistent; }
-        public void setConsistent(boolean consistent) { isConsistent = consistent; }
+        public void setConsistent(boolean consistent) { this.isConsistent = consistent; }
 
         public List<ConsistencyIssue> getIssues() { return issues; }
         public void setIssues(List<ConsistencyIssue> issues) { this.issues = issues; }

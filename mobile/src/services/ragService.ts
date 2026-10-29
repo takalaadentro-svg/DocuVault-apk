@@ -1,4 +1,5 @@
 import { DocumentItem, DocumentChatResponse, DocumentChatCitation } from '../types';
+import { sanitizeOcrText } from './ocrService';
 
 /**
  * Strips raw PDF byte code, object syntax, stream contents, and unreadable binary metadata
@@ -55,7 +56,7 @@ export function cleanDocumentText(rawText?: string | null): string {
     return '';
   }
 
-  return text;
+  return sanitizeOcrText(text);
 }
 
 export function isGarbageText(str?: string | null): boolean {

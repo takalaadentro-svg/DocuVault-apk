@@ -227,7 +227,7 @@ public class OcrIntegrationService {
         String lower = cleanName.toLowerCase();
 
         StringBuilder sb = new StringBuilder();
-        sb.append("OFFICIAL VAULT DOCUMENT RECORD: ").append(cleanName.toUpperCase()).append("\n");
+        sb.append("Document Title: ").append(cleanName).append("\n");
 
         if (lower.contains("aadhaar") || lower.contains("uidai") || lower.contains("adhar")) {
             sb.append("Issuing Authority: Unique Identification Authority of India (UIDAI)\n");
@@ -256,6 +256,6 @@ public class OcrIntegrationService {
 
         sb.append("Storage Encryption: AES-256 Cloud Locked with SHA-256 Integrity Verification.\n");
         sb.append("Digital Audit Timestamp: ").append(new java.util.Date().toString()).append("\n");
-        return sb.toString();
+        return DocumentChatService.cleanDocumentText(sb.toString());
     }
 }

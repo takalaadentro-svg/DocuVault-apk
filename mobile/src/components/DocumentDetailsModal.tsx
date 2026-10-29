@@ -15,6 +15,7 @@ import { previewCache } from '../services/previewCache';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { PDFPreviewViewer } from './PDFPreviewViewer';
+import { ClientOCRService, sanitizeOcrText } from '../services/ocrService';
 
 interface DocumentDetailsModalProps {
   document: DocumentItem | null;
@@ -55,6 +56,8 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
   const [dnaResult, setDnaResult] = useState<DocumentDNAVerificationResult | null>(null);
   const [isVerifyingDna, setIsVerifyingDna] = useState(false);
   const [isCopiedOcr, setIsCopiedOcr] = useState(false);
+  const [rescanOcrText, setRescanOcrText] = useState<string | null>(null);
+  const [isRescanningOcr, setIsRescanningOcr] = useState(false);
 
   // Version History & Offline state
   const [versions, setVersions] = useState<DocumentVersion[]>([]);
@@ -265,6 +268,7 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
       setActiveTab('preview');
       setIsEditing(false);
       setShowDeleteConfirm(false);
+      setRescanOcrText(null);
       setIsOffline(doc.is_offline_available ?? true);
       setIsFamilyLocker(Boolean(doc.is_family_vault ?? (doc as any).family_vault ?? (doc as any).isFamilyVault));
       if (activeTab === 'versions') {
@@ -463,7 +467,63 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
     }
   };
 
+  const cleanedOcr = sanitizeOcrText(rescanOcrText ?? doc.ocr_text);
+  const fallbackOcrSummary = [
+    `Document Title: ${doc.title}`,
+    doc.category ? `Category: ${doc.category}${doc.subtype ? ` (${doc.subtype})` : ''}` : '',
+    doc.holder_name ? `Holder Name: ${doc.holder_name}` : '',
+    doc.doc_number ? `Document ID / Number: ${doc.doc_number}` : '',
+    doc.issuer ? `Issuer: ${doc.issuer}` : '',
+    doc.dob ? `Date of Birth: ${doc.dob}` : '',
+    doc.issue_date ? `Issue Date: ${doc.issue_date}` : '',
+    doc.expiry_date ? `Expiry Date: ${doc.expiry_date}` : '',
+  ].filter(Boolean).join('\n');
+  const displayOcrText = cleanedOcr || fallbackOcrSummary;
+
+  const handleRescanOcr = async () => {
+    if (!doc || isRescanningOcr) return;
+    setIsRescanningOcr(true);
+    try {
+      let blob: Blob | undefined = previewCache.get(doc.id)?.blob;
+      let mime = previewCache.get(doc.id)?.mimeType || doc.mime_type || 'image/jpeg';
+      if (!blob) {
+        const res = await api.previewDocument(doc.id);
+        blob = res.blob;
+        mime = res.mimeType || mime;
+        previewCache.storeBlob(doc.id, res.blob, mime);
+      }
+      const ext = isPdf ? '.pdf' : '.jpg';
+      const fileName = doc.original_filename || `${doc.title || 'document'}${ext}`;
+      const fileObj = new File([blob], fileName, { type: isPdf ? 'application/pdf' : (mime.startsWith('image/') ? mime : 'image/jpeg') });
+      const ocrRes = await ClientOCRService.analyzeDocument(fileObj, user?.full_name);
+      const freshCleanText = sanitizeOcrText(ocrRes.extracted_text) || fallbackOcrSummary;
+      setRescanOcrText(freshCleanText);
+      doc.ocr_text = freshCleanText;
+      if (isOwner) {
+        await api.updateDocument(doc.id, {
+          ocr_text: freshCleanText,
+          ocrText: freshCleanText,
+          holder_name: ocrRes.holder_name || doc.holder_name,
+          doc_number: ocrRes.doc_number || doc.doc_number,
+          dob: ocrRes.dob || doc.dob,
+        }).catch(() => {});
+        onRefresh();
+      }
+    } catch (e: any) {
+      alert('Could not re-scan document OCR: ' + (e?.message || e));
+    } finally {
+      setIsRescanningOcr(false);
+    }
+  };
+
   const handleCopyOcr = () => {
+    if (displayOcrText) {
+      navigator.clipboard.writeText(displayOcrText);
+      setIsCopiedOcr(true);
+      setTimeout(() => setIsCopiedOcr(false), 2000);
+    }
+  };
+  const _unusedOldCopy = () => {
     if (doc.ocr_text) {
       navigator.clipboard.writeText(doc.ocr_text);
       setIsCopiedOcr(true);
@@ -1130,7 +1190,31 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
                     Automatically scanned content indexed for keyword & voice search
                   </div>
                 </div>
-                {doc.ocr_text && (
+                {displayOcrText && (
+                  <button
+                    onClick={handleRescanOcr}
+                    disabled={isRescanningOcr}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 8,
+                      backgroundColor: colors.accent,
+                      border: 'none',
+                      color: '#FFF',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: isRescanningOcr ? 'wait' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      marginLeft: 'auto',
+                      marginRight: 8,
+                    }}
+                  >
+                    <RefreshCw size={14} style={{ animation: isRescanningOcr ? 'spin 1s linear infinite' : 'none' }} />
+                    <span>{isRescanningOcr ? 'Scanning...' : 'Re-Scan Clean OCR'}</span>
+                  </button>
+                )}
+                {displayOcrText && (
                   <button
                     onClick={handleCopyOcr}
                     style={{
@@ -1153,7 +1237,7 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
                 )}
               </div>
 
-              {doc.ocr_text ? (
+              {displayOcrText ? (
                 <div style={{
                   padding: 16,
                   borderRadius: 12,
@@ -1167,7 +1251,7 @@ export const DocumentDetailsModal: React.FC<DocumentDetailsModalProps> = ({
                   maxHeight: 340,
                   overflowY: 'auto'
                 }}>
-                  {doc.ocr_text}
+                  {displayOcrText}
                 </div>
               ) : (
                 <div style={{

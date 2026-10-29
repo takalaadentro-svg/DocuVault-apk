@@ -609,6 +609,32 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, defaultFamilyV
             </div>
           )}
 
+          {ocrResult && (
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: colors.textMuted }}>
+                Extracted Clean OCR Text (Review & Edit)
+              </label>
+              <textarea
+                rows={4}
+                value={ocrResult.extracted_text || ''}
+                onChange={e => setOcrResult({ ...ocrResult, extracted_text: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '8px 10px',
+                  borderRadius: 10,
+                  backgroundColor: colors.bg,
+                  border: `1px solid ${colors.surfaceBorder}`,
+                  color: colors.text,
+                  fontFamily: 'monospace',
+                  fontSize: 11,
+                  lineHeight: 1.5,
+                  marginTop: 4,
+                  outline: 'none',
+                }}
+              />
+            </div>
+          )}
+
           {/* Basic Fields */}
           <div>
             <label style={{ fontSize: 12, fontWeight: 700, color: colors.text }}>Document Title *</label>

@@ -294,6 +294,7 @@ public class DocumentService {
         if (req.getDocNumber() != null) doc.setDocNumber(req.getDocNumber());
         if (req.getDob() != null) doc.setDob(req.getDob());
         if (req.getNotes() != null) doc.setNotes(req.getNotes());
+        if (req.getOcrText() != null) doc.setOcrText(DocumentChatService.cleanDocumentText(req.getOcrText()));
         if (req.getExpiryDate() != null) doc.setExpiryDate(req.getExpiryDate());
         if (req.getIssueDate() != null) doc.setIssueDate(req.getIssueDate());
         Boolean famVal = req.getFamilyVault() != null ? req.getFamilyVault() : req.getIsFamilyVault();
@@ -434,7 +435,7 @@ public class DocumentService {
         resp.setFileSize(record.getFileSize());
         resp.setMimeType(record.getMimeType());
         resp.setSha256Hash(record.getSha256Hash());
-        resp.setOcrText(record.getOcrText());
+        resp.setOcrText(DocumentChatService.cleanDocumentText(record.getOcrText()));
         resp.setOcrConfidence(record.getOcrConfidence());
         resp.setBlurred(record.isBlurred());
         resp.setExpiryDate(record.getExpiryDate());

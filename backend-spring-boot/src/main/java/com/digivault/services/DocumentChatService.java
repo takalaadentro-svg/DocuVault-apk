@@ -260,7 +260,25 @@ public class DocumentChatService {
         text = text.replaceAll("/[A-Za-z0-9_]+", " ");
         text = text.replaceAll("\\\\([()])", "$1");
         text = text.replaceAll("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F-\\x9F]", " ");
-        text = text.replaceAll("[ \\t]+", " ").replaceAll("\\n\\s*\\n", "\n").trim();
+        text = text.replaceAll("[~^|«»§¤¢£¥©®™±÷×¬¦¨´¸ºª°•·—–_+=<>\\[\\]{}\\\\]+", " ");
+        StringBuilder cleanBuilder = new StringBuilder();
+        for (String line : text.split("\\r?\\n")) {
+            String trimmed = line.replaceAll("[ \\t]+", " ").trim();
+            if (trimmed.length() < 3) continue;
+            String lower = trimmed.toLowerCase();
+            if (lower.contains("official vault document record")
+                    || lower.contains("storage encryption: aes-256")
+                    || lower.contains("digital audit timestamp:")
+                    || lower.contains("verified encrypted vault asset")) {
+                continue;
+            }
+            long alnum = trimmed.chars().filter(Character::isLetterOrDigit).count();
+            long nonSpace = trimmed.chars().filter(c -> !Character.isWhitespace(c)).count();
+            if (alnum < 3 || nonSpace == 0 || ((double) alnum / nonSpace) < 0.70) continue;
+            if (cleanBuilder.length() > 0) cleanBuilder.append("\n");
+            cleanBuilder.append(trimmed);
+        }
+        text = cleanBuilder.toString().trim();
 
         if (isGarbageText(text)) {
             return "";
