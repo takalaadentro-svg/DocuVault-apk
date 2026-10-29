@@ -194,32 +194,20 @@ public class DocumentService {
     public List<DocumentResponse> getDocuments(User user, String category, Boolean isFamilyVault, Boolean isEmergencyEligible) {
         List<DocumentRecord> docs = new ArrayList<>();
         try {
-            if (Boolean.TRUE.equals(isFamilyVault)) {
-                // Return user's own family docs PLUS fellow group members' family docs
-                Set<String> memberIds = (familyService != null) ? familyService.getFamilyMemberUserIds(user.getId()) : new HashSet<>();
-                memberIds.add(user.getId());
-                docs = documentRepository.findByUserIdInAndIsFamilyVault(new ArrayList<>(memberIds), true);
-            } else if (Boolean.FALSE.equals(isFamilyVault)) {
-                docs = documentRepository.findByUserIdAndIsFamilyVault(user.getId(), false);
-            } else if (isEmergencyEligible != null) {
-                docs = documentRepository.findByUserIdAndIsEmergencyEligible(user.getId(), isEmergencyEligible);
-            } else if (category != null && !category.isEmpty()) {
-                docs = documentRepository.findByUserIdAndCategory(user.getId(), category);
-            } else {
-                // All documents: user's own docs PLUS family docs shared by fellow members
-                List<DocumentRecord> ownDocs = documentRepository.findByUserId(user.getId());
-                docs.addAll(ownDocs);
+            // 1. Fetch user's own documents
+            List<DocumentRecord> ownDocs = documentRepository.findByUserId(user.getId());
+            docs.addAll(ownDocs);
 
-                if (familyService != null) {
-                    Set<String> fellowMemberIds = familyService.getFamilyMemberUserIds(user.getId());
-                    fellowMemberIds.remove(user.getId());
-                    if (!fellowMemberIds.isEmpty()) {
-                        List<DocumentRecord> sharedFamilyDocs = documentRepository.findByUserIdInAndIsFamilyVault(new ArrayList<>(fellowMemberIds), true);
-                        Set<String> existingIds = docs.stream().map(DocumentRecord::getId).collect(Collectors.toSet());
-                        for (DocumentRecord sDoc : sharedFamilyDocs) {
-                            if (!existingIds.contains(sDoc.getId())) {
-                                docs.add(sDoc);
-                            }
+            // 2. Fetch fellow family group members' family shared documents
+            if (familyService != null) {
+                Set<String> fellowMemberIds = familyService.getFamilyMemberUserIds(user.getId());
+                fellowMemberIds.remove(user.getId());
+                if (!fellowMemberIds.isEmpty()) {
+                    List<DocumentRecord> sharedFamilyDocs = documentRepository.findByUserIdInAndIsFamilyVault(new ArrayList<>(fellowMemberIds), true);
+                    Set<String> existingIds = docs.stream().map(DocumentRecord::getId).collect(Collectors.toSet());
+                    for (DocumentRecord sDoc : sharedFamilyDocs) {
+                        if (!existingIds.contains(sDoc.getId())) {
+                            docs.add(sDoc);
                         }
                     }
                 }

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Users, UserPlus, ShieldAlert, HeartPulse, FileText, 
   Check, X, Trash2, Plus, ShieldCheck, Phone, Mail, ArrowRight, Eye, AlertTriangle, KeyRound,
-  Lock, Unlock, FolderLock, User as UserIcon, UserCheck, RefreshCw, Filter, Download
+  Lock, Unlock, FolderLock, User as UserIcon, UserCheck, RefreshCw, Filter, Download, QrCode
 } from 'lucide-react';
 import { FamilyGroup, FamilyInvitation, DocumentItem, EmergencyContact, EmergencyMedicalInfo } from '../types';
 import { api } from '../services/api';
@@ -22,6 +22,7 @@ interface FamilyScreenProps {
   onOpenInvite: (familyId: string) => void;
   onOpenDocument: (doc: DocumentItem) => void;
   onOpenEmergencyAccess: () => void;
+  onOpenScan?: () => void;
 }
 
 export const FamilyScreen: React.FC<FamilyScreenProps> = ({
@@ -36,6 +37,7 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
   onOpenInvite,
   onOpenDocument,
   onOpenEmergencyAccess,
+  onOpenScan,
 }) => {
   const { colors } = useTheme();
   const { user } = useAuth();
@@ -117,6 +119,8 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
     }
   }, [primaryFamily, selectedFamilyId, families]);
 
+  const cacheKey = `docuvault_cached_all_vault_docs_${user?.id || 'default'}`;
+
   // Unified list of all shared documents in this family vault ecosystem
   const allVaultDocuments = React.useMemo(() => {
     const map = new Map<string, DocumentItem>();
@@ -124,14 +128,14 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
     // 1. Documents shared by other members with current user
     (sharedWithMe || []).forEach(doc => {
       if (doc && doc.id) {
-        map.set(doc.id, doc);
+        map.set(doc.id, { ...doc, _isSharedWithMe: true, is_family_vault: true });
       }
     });
 
     // 2. Documents shared by current user into family vault
     (sharedByMe || []).forEach(doc => {
       if (doc && doc.id) {
-        map.set(doc.id, doc);
+        map.set(doc.id, { ...doc, is_family_vault: true });
       }
     });
 
@@ -146,16 +150,47 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
     (families || []).forEach(fam => {
       ((fam as any).documents || []).forEach((doc: any) => {
         if (doc && doc.id && !map.has(doc.id)) {
-          map.set(doc.id, doc);
+          map.set(doc.id, { ...doc, is_family_vault: true });
         }
       });
     });
 
-    return Array.from(map.values());
-  }, [sharedWithMe, sharedByMe, documents, families]);
+    const list = Array.from(map.values());
+    if (list.length > 0) {
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(list));
+      } catch (e) {}
+      return list;
+    }
+
+    // Fallback to cache if query returned empty temporarily
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+
+    return list;
+  }, [sharedWithMe, sharedByMe, documents, families, cacheKey]);
 
   // Resilient fallback: cache last-known vault documents so background query updates never flash empty
   const lastKnownDocsRef = React.useRef<DocumentItem[]>([]);
+  if (lastKnownDocsRef.current.length === 0) {
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          lastKnownDocsRef.current = parsed;
+        }
+      }
+    } catch (e) {}
+  }
+
   React.useEffect(() => {
     if (allVaultDocuments.length > 0) {
       lastKnownDocsRef.current = allVaultDocuments;
@@ -167,6 +202,7 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
   const [docScope, setDocScope] = useState<'all' | 'active'>('all');
 
   const isSender = (doc: DocumentItem): boolean => {
+    if ((doc as any)._isSharedWithMe) return false;
     const docUserId = String((doc as any).userId || (doc as any).user_id || (doc as any).ownerId || (doc as any).owner_id || '');
     return Boolean(docUserId && user?.id && docUserId === user.id);
   };
@@ -237,10 +273,14 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
       const primaryDocIds = new Set<string>(
         ((primaryFamily as any).documents || []).map((d: any) => String(d?.id || ''))
       );
-      return activeVaultDocs.filter(d => {
+      const filtered = activeVaultDocs.filter(d => {
         const dUid = String((d as any).userId || (d as any).user_id || (d as any).ownerId || (d as any).owner_id || '');
         return memberUserIds.has(dUid) || isSender(d) || primaryDocIds.has(d.id);
       });
+      if (filtered.length === 0 && activeVaultDocs.length > 0) {
+        return activeVaultDocs;
+      }
+      return filtered;
     }
     return activeVaultDocs;
   }, [activeVaultDocs, docScope, primaryFamily, user?.id]);
@@ -549,6 +589,29 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
             >
               <UserPlus size={14} />
               <span>Invite</span>
+            </button>
+          )}
+
+          {onOpenScan && (
+            <button
+              onClick={onOpenScan}
+              title="Receive document via QR code"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 12px',
+                borderRadius: 10,
+                backgroundColor: 'rgba(13, 148, 136, 0.15)',
+                color: colors.accentLight,
+                border: `1px solid ${colors.accent}`,
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              <QrCode size={14} />
+              <span>Receive QR</span>
             </button>
           )}
         </div>
@@ -1270,24 +1333,48 @@ const [showCreateFamily, setShowCreateFamily] = useState(false);
                   </div>
                 </div>
               </div>
-              <button
-                onClick={onRefresh}
-                title="Refresh shared documents"
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 8,
-                  backgroundColor: colors.surface,
-                  border: `1px solid ${colors.surfaceBorder}`,
-                  color: colors.textMuted,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                }}
-              >
-                <RefreshCw size={14} />
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {onOpenScan && (
+                  <button
+                    onClick={onOpenScan}
+                    title="Receive document via QR code"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 5,
+                      padding: '7px 12px',
+                      borderRadius: 8,
+                      backgroundColor: 'rgba(13, 148, 136, 0.15)',
+                      border: `1px solid ${colors.accent}`,
+                      color: colors.accentLight,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <QrCode size={14} />
+                    <span>Receive QR</span>
+                  </button>
+                )}
+                <button
+                  onClick={onRefresh}
+                  title="Refresh shared documents"
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 8,
+                    backgroundColor: colors.surface,
+                    border: `1px solid ${colors.surfaceBorder}`,
+                    color: colors.textMuted,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <RefreshCw size={14} />
+                </button>
+              </div>
             </div>
 
             {/* Permission notice banner */}

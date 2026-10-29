@@ -44,6 +44,9 @@ public class ShareController {
     @Autowired
     private DocumentRepository documentRepository;
 
+    @Autowired
+    private DocumentService documentService;
+
     @PostMapping({"/create", ""})
     public ResponseEntity<?> createShare(
             @AuthenticationPrincipal User user,
@@ -164,6 +167,77 @@ public class ShareController {
             resp.put("max_access_count", 5);
 
             return ResponseEntity.ok(resp);
+        } catch (Exception e) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("detail", e.getMessage());
+            if (e.getMessage() != null && e.getMessage().toLowerCase().contains("pin")) {
+                err.put("requires_pin", true);
+                return ResponseEntity.status(401).body(err);
+            }
+            return ResponseEntity.badRequest().body(err);
+        }
+    }
+
+    @PostMapping(value = {"/public/{token}/import", "/import/{token}"})
+    public ResponseEntity<?> importSharedDocument(
+            @AuthenticationPrincipal User user,
+            @PathVariable("token") String token,
+            @RequestBody(required = false) Map<String, Object> body) {
+        if (user == null) {
+            return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
+        }
+        String pin = null;
+        boolean isFamilyVault = false;
+        if (body != null) {
+            if (body.get("pin") != null) pin = String.valueOf(body.get("pin")).trim();
+            for (String key : Arrays.asList("is_family_vault", "isFamilyVault", "familyVault")) {
+                if (body.containsKey(key) && body.get(key) != null) {
+                    isFamilyVault = Boolean.parseBoolean(String.valueOf(body.get(key)));
+                    break;
+                }
+            }
+        }
+        try {
+            DocumentRecord originalDoc = shareService.accessPublicDocumentRecord(token, pin);
+            DocumentRecord imported = new DocumentRecord();
+            imported.setUserId(user.getId());
+            imported.setTitle(originalDoc.getTitle());
+            imported.setCategory(originalDoc.getCategory());
+            imported.setDocType(originalDoc.getDocType());
+            imported.setSubtype(originalDoc.getSubtype());
+            imported.setIssuer(originalDoc.getIssuer() != null && !originalDoc.getIssuer().isEmpty() 
+                    ? originalDoc.getIssuer() 
+                    : "Shared Import");
+            imported.setHolderName(originalDoc.getHolderName());
+            imported.setDocNumber(originalDoc.getDocNumber());
+            imported.setDob(originalDoc.getDob());
+            imported.setOriginalFilename(originalDoc.getOriginalFilename());
+            imported.setStoredFilename(originalDoc.getStoredFilename());
+            imported.setFilePath(originalDoc.getFilePath());
+            imported.setFileSize(originalDoc.getFileSize());
+            imported.setMimeType(originalDoc.getMimeType());
+            imported.setSha256Hash(originalDoc.getSha256Hash());
+            imported.setBase64Data(originalDoc.getBase64Data());
+            imported.setOcrText(originalDoc.getOcrText());
+            imported.setOcrConfidence(originalDoc.getOcrConfidence());
+            imported.setNotes(originalDoc.getNotes());
+            imported.setFamilyVault(isFamilyVault);
+            imported.setIsFamilyVault(isFamilyVault);
+            imported.setEmergencyEligible(false);
+            imported.setOfflineAvailable(true);
+            imported.setExpiryDate(originalDoc.getExpiryDate());
+            imported.setIssueDate(originalDoc.getIssueDate());
+            imported.setVersion(1);
+            imported.setCreatedAt(new Date());
+            imported.setUpdatedAt(new Date());
+
+            DocumentRecord saved = documentRepository.save(imported);
+            DocumentResponse resp = (documentService != null) ? documentService.toResponse(saved) : null;
+            if (resp != null) {
+                resp.setFamilyVault(isFamilyVault);
+                resp.setIsFamilyVault(isFamilyVault);
+            }
+            return ResponseEntity.ok(resp != null ? resp : Collections.singletonMap("message", "Document imported successfully"));
         } catch (Exception e) {
             Map<String, Object> err = new HashMap<>();
             err.put("detail", e.getMessage());

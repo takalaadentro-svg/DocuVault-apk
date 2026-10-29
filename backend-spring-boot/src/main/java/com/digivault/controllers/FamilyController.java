@@ -37,6 +37,9 @@ public class FamilyController {
     @Autowired
     private com.digivault.repositories.UserRepository userRepository;
 
+    @Autowired(required = false)
+    private com.digivault.repositories.DocumentPermissionRepository documentPermissionRepository;
+
     @GetMapping({"", "/"})
     public ResponseEntity<?> getFamilyGroup(@AuthenticationPrincipal User user) {
         if (user == null) {
@@ -170,12 +173,29 @@ public class FamilyController {
         String myUid = (user.getId() != null) ? user.getId().trim() : "";
         Set<String> fellowMemberIds = familyService.getFamilyMemberUserIds(myUid);
         fellowMemberIds.removeIf(id -> id == null || id.trim().isEmpty() || id.equalsIgnoreCase(myUid));
-        if (fellowMemberIds.isEmpty()) {
-            return ResponseEntity.ok(Collections.emptyList());
+
+        List<DocumentRecord> docs = new ArrayList<>();
+        if (!fellowMemberIds.isEmpty()) {
+            docs.addAll(documentRepository.findByUserIdInAndIsFamilyVault(new ArrayList<>(fellowMemberIds), true));
         }
-        List<DocumentRecord> docs = documentRepository.findByUserIdInAndIsFamilyVault(new ArrayList<>(fellowMemberIds), true);
+
+        // Also include documents directly shared via DocumentPermission
+        if (documentPermissionRepository != null && !myUid.isEmpty()) {
+            try {
+                List<com.digivault.models.DocumentPermission> perms = documentPermissionRepository.findByUserId(myUid);
+                Set<String> existingIds = docs.stream().map(DocumentRecord::getId).collect(Collectors.toSet());
+                for (com.digivault.models.DocumentPermission p : perms) {
+                    if (p.getDocumentId() != null && !existingIds.contains(p.getDocumentId())) {
+                        documentRepository.findById(p.getDocumentId()).ifPresent(docs::add);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
         List<DocumentResponse> responses = docs.stream().map(doc -> {
             DocumentResponse resp = documentService.toResponse(doc);
+            resp.setFamilyVault(true);
+            resp.setIsFamilyVault(true);
             if (userRepository != null && doc.getUserId() != null) {
                 userRepository.findById(doc.getUserId()).ifPresent(u -> {
                     if (resp.getHolderName() == null || resp.getHolderName().trim().isEmpty()) {
@@ -197,7 +217,12 @@ public class FamilyController {
             return ResponseEntity.status(401).body(Collections.singletonMap("detail", "Unauthorized"));
         }
         List<DocumentRecord> docs = documentRepository.findByUserIdAndIsFamilyVault(user.getId(), true);
-        List<DocumentResponse> responses = docs.stream().map(documentService::toResponse).collect(Collectors.toList());
+        List<DocumentResponse> responses = docs.stream().map(doc -> {
+            DocumentResponse resp = documentService.toResponse(doc);
+            resp.setFamilyVault(true);
+            resp.setIsFamilyVault(true);
+            return resp;
+        }).collect(Collectors.toList());
         return ResponseEntity.ok(responses);
     }
 

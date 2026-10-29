@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, Camera, KeyRound, Download, FileText, AlertCircle, 
   CheckCircle2, ShieldCheck, Image as ImageIcon, RefreshCw, 
-  ExternalLink, Copy, Check, Users 
+  ExternalLink, Copy, Check, Users, FolderLock, Lock
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { api, extractShareToken } from '../services/api';
@@ -13,9 +13,17 @@ interface ScanQRModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialToken?: string | null;
+  onSuccess?: (title?: string) => void;
+  onRefresh?: () => void;
 }
 
-export const ScanQRModal: React.FC<ScanQRModalProps> = ({ isOpen, onClose, initialToken }) => {
+export const ScanQRModal: React.FC<ScanQRModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  initialToken,
+  onSuccess,
+  onRefresh,
+}) => {
   const { colors } = useTheme();
   const [activeTab, setActiveTab] = useState<'camera' | 'manual'>('camera');
   const [tokenInput, setTokenInput] = useState('');
@@ -29,6 +37,8 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({ isOpen, onClose, initi
   const [cameraFacing, setCameraFacing] = useState<'environment' | 'user'>('environment');
   const [copied, setCopied] = useState(false);
   const [familyInviteJoined, setFamilyInviteJoined] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
 
   const qrScannerRef = useRef<Html5Qrcode | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -203,6 +213,27 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({ isOpen, onClose, initi
     }
   };
 
+  const handleImportDoc = async (isFamilyVault: boolean) => {
+    setIsImporting(true);
+    setErrorMessage(null);
+    try {
+      const cleanToken = extractShareToken(tokenInput);
+      const imported = await api.importSharedDocument(cleanToken, {
+        is_family_vault: isFamilyVault,
+        pin: pinInput.trim() || undefined,
+      });
+      const destination = isFamilyVault ? 'Family Vault' : 'Personal Locker';
+      const title = imported?.title || sharedDoc?.title || 'Document';
+      setImportSuccessMessage(`"${title}" has been saved into your ${destination}!`);
+      if (onSuccess) onSuccess(title);
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to import document into your locker.');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   const handleReset = () => {
     setSharedDoc(null);
     setScannedRawText(null);
@@ -211,6 +242,8 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({ isOpen, onClose, initi
     setNeedsPin(false);
     setErrorMessage(null);
     setFamilyInviteJoined(null);
+    setImportSuccessMessage(null);
+    setIsImporting(false);
     if (activeTab === 'camera') {
       startScanner();
     }
@@ -465,7 +498,72 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({ isOpen, onClose, initi
                 </div>
               )}
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {importSuccessMessage ? (
+                  <div style={{
+                    padding: '12px 14px',
+                    borderRadius: 12,
+                    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                    border: '1px solid #10B981',
+                    color: '#34D399',
+                    fontSize: 13,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    fontWeight: 600,
+                  }}>
+                    <CheckCircle2 size={18} style={{ flexShrink: 0 }} />
+                    <span>{importSuccessMessage}</span>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <button
+                      onClick={() => handleImportDoc(false)}
+                      disabled={isImporting}
+                      style={{
+                        padding: '11px 8px',
+                        borderRadius: 12,
+                        backgroundColor: colors.surfaceCard,
+                        border: `1px solid ${colors.surfaceBorder}`,
+                        color: colors.text,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: isImporting ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        opacity: isImporting ? 0.6 : 1,
+                      }}
+                    >
+                      <Lock size={14} color={colors.accentLight} />
+                      <span>{isImporting ? 'Saving...' : 'Save to Personal'}</span>
+                    </button>
+                    <button
+                      onClick={() => handleImportDoc(true)}
+                      disabled={isImporting}
+                      style={{
+                        padding: '11px 8px',
+                        borderRadius: 12,
+                        backgroundColor: 'rgba(13, 148, 136, 0.15)',
+                        border: `1px solid ${colors.accent}`,
+                        color: colors.accentLight,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: isImporting ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        opacity: isImporting ? 0.6 : 1,
+                      }}
+                    >
+                      <FolderLock size={14} />
+                      <span>{isImporting ? 'Adding...' : 'Add to Family'}</span>
+                    </button>
+                  </div>
+                )}
+
                 <a
                   href={sharedDoc.preview_url}
                   target="_blank"

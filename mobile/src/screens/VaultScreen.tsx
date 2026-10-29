@@ -5,7 +5,7 @@ import {
   ShieldAlert, Calendar, Eye, Download, QrCode, X,
   Mic, MicOff, Lock, Users, Dna, Sparkles, CheckCircle2, Check, Share2
 } from 'lucide-react';
-import { DocumentItem } from '../types';
+import { DocumentItem, User } from '../types';
 import { useTheme } from '../context/ThemeContext';
 import { api } from '../services/api';
 import { showLocalNotification } from '../services/pushNotifications';
@@ -13,12 +13,15 @@ import { showLocalNotification } from '../services/pushNotifications';
 interface VaultScreenProps {
   documents: DocumentItem[];
   sharedWithMe?: DocumentItem[];
+  sharedByMe?: DocumentItem[];
+  user?: User | null;
   selectedCategory: string;
   onSelectCategory: (cat: string) => void;
   onOpenUpload: (isFamily?: boolean) => void;
   onOpenDocument: (doc: DocumentItem) => void;
   onOpenQRShare: (doc: DocumentItem) => void;
   onOpenAssistant?: () => void;
+  onOpenScan?: () => void;
   onRefresh?: () => void;
 }
 
@@ -37,12 +40,15 @@ const CATEGORIES = [
 export const VaultScreen: React.FC<VaultScreenProps> = ({
   documents,
   sharedWithMe = [],
+  sharedByMe = [],
+  user = null,
   selectedCategory,
   onSelectCategory,
   onOpenUpload,
   onOpenDocument,
   onOpenQRShare,
   onOpenAssistant,
+  onOpenScan,
   onRefresh,
 }) => {
   const { colors } = useTheme();
@@ -134,24 +140,53 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
 
   // Merge user's own documents and documents shared via Family Vault
   const combinedDocs = React.useMemo(() => {
-    const ownDocs = (documents || []).map(d => ({ ...d, _isSharedWithMe: false }));
-    const ownIds = new Set(ownDocs.map(d => d.id));
-    const incomingShared = (sharedWithMe || [])
-      .filter(d => !ownIds.has(d.id))
-      .map(d => ({
+    const map = new Map<string, DocumentItem>();
+
+    // 1. Process documents array from backend
+    (documents || []).forEach(d => {
+      if (!d || !d.id) return;
+      const dUid = String((d as any).userId || (d as any).user_id || (d as any).ownerId || (d as any).owner_id || '');
+      const isOtherUser = Boolean(user?.id && dUid && dUid !== String(user.id));
+      map.set(d.id, {
+        ...d,
+        _isSharedWithMe: isOtherUser || Boolean((d as any)._isSharedWithMe),
+        is_family_vault: isOtherUser ? true : isFamilyDoc(d),
+      });
+    });
+
+    // 2. Add incoming documents shared with me via Family Vault
+    (sharedWithMe || []).forEach(d => {
+      if (!d || !d.id) return;
+      map.set(d.id, {
         ...d,
         _isSharedWithMe: true,
         is_family_vault: true,
         family_vault: true,
         isFamilyVault: true,
-      }));
-    return [...ownDocs, ...incomingShared];
-  }, [documents, sharedWithMe]);
+      });
+    });
+
+    // 3. Add documents shared by me into Family Vault
+    (sharedByMe || []).forEach(d => {
+      if (!d || !d.id) return;
+      if (!map.has(d.id)) {
+        map.set(d.id, {
+          ...d,
+          _isSharedWithMe: false,
+          is_family_vault: true,
+          family_vault: true,
+          isFamilyVault: true,
+        });
+      }
+    });
+
+    return Array.from(map.values());
+  }, [documents, sharedWithMe, sharedByMe, user?.id]);
 
   // Filter & Search
   const filteredDocs = combinedDocs.filter(doc => {
     // Locker Mode match
-    const isFam = isFamilyDoc(doc);
+    const isFam = isFamilyDoc(doc) || Boolean((doc as any)._isSharedWithMe);
     if (lockerTab === 'personal' && isFam) return false;
     if (lockerTab === 'family' && !isFam) return false;
 
@@ -223,6 +258,28 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
             >
               <Sparkles size={16} />
               <span>AI Assistant</span>
+            </button>
+          )}
+          {onOpenScan && (
+            <button
+              onClick={onOpenScan}
+              title="Receive Document via QR"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '10px 14px',
+                borderRadius: 12,
+                backgroundColor: colors.surfaceCard,
+                color: colors.text,
+                border: `1px solid ${colors.surfaceBorder}`,
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              <QrCode size={16} color={colors.accentLight} />
+              <span>Receive</span>
             </button>
           )}
           <button

@@ -149,6 +149,16 @@ export const AppContent: React.FC = () => {
 
   const { data: sharedWithMe = [], refetch: refetchSharedWithMe } = useQuery<DocumentItem[]>({
     queryKey: ['shared_with_me', user?.id],
+    initialData: () => {
+      try {
+        const stored = localStorage.getItem(`docuvault_cached_shared_with_me_${user?.id || 'guest'}`);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {}
+      return [];
+    },
     queryFn: async () => {
       const mergedMap = new Map<string, DocumentItem>();
 
@@ -175,13 +185,27 @@ export const AppContent: React.FC = () => {
         console.warn('api.getSharedWithMe fetch failed, using cached vault state:', e);
       }
 
-      // 3. Also ensure all documents from all families' member caches are merged
+      // 3. Merge fellow members' documents from documents array
+      const myUid = String(user?.id || '');
+      (documents || []).forEach(d => {
+        const dUid = String(d?.user_id || d?.userId || d?.owner_id || d?.ownerId || '');
+        const isFam = Boolean(d?.is_family_vault ?? (d as any)?.family_vault ?? (d as any)?.isFamilyVault);
+        if (d && d.id && myUid && dUid && dUid !== myUid && isFam) {
+          mergedMap.set(d.id, {
+            ...d,
+            is_family_vault: true,
+            family_vault: true,
+            isFamilyVault: true,
+          });
+        }
+      });
+
+      // 4. Also ensure all documents from all families' member caches are merged
       try {
         const currentFamilies = families.length > 0 ? families : await api.getFamilies().catch(() => []);
         (currentFamilies || []).forEach(f => {
           ((f as any).documents || []).forEach((d: any) => {
             const dUid = String(d?.user_id || d?.userId || d?.owner_id || d?.ownerId || '');
-            const myUid = String(user?.id || '');
             if (d && d.id && (!myUid || !dUid || dUid !== myUid)) {
               mergedMap.set(d.id, {
                 ...d,
@@ -195,9 +219,11 @@ export const AppContent: React.FC = () => {
       } catch (e) {}
 
       const result = Array.from(mergedMap.values());
-      try {
-        localStorage.setItem(`docuvault_cached_shared_with_me_${user?.id || 'guest'}`, JSON.stringify(result));
-      } catch (e) {}
+      if (result.length > 0) {
+        try {
+          localStorage.setItem(`docuvault_cached_shared_with_me_${user?.id || 'guest'}`, JSON.stringify(result));
+        } catch (e) {}
+      }
       return result;
     },
     enabled: isAuthenticated,
@@ -206,8 +232,19 @@ export const AppContent: React.FC = () => {
 
   const { data: sharedByMe = [], refetch: refetchSharedByMe } = useQuery<DocumentItem[]>({
     queryKey: ['shared_by_me', user?.id],
+    initialData: () => {
+      try {
+        const stored = localStorage.getItem(`docuvault_cached_shared_by_me_${user?.id || 'guest'}`);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {}
+      return [];
+    },
     queryFn: async () => {
       const mergedMap = new Map<string, DocumentItem>();
+      const myUid = String(user?.id || '');
 
       try {
         const stored = localStorage.getItem(`docuvault_cached_shared_by_me_${user?.id || 'guest'}`);
@@ -231,16 +268,19 @@ export const AppContent: React.FC = () => {
       }
 
       (documents || []).forEach(d => {
+        const dUid = String(d?.user_id || d?.userId || d?.owner_id || d?.ownerId || '');
         const isFam = Boolean(d?.is_family_vault ?? (d as any)?.family_vault ?? (d as any)?.isFamilyVault);
-        if (d && d.id && isFam) {
+        if (d && d.id && isFam && (!myUid || !dUid || dUid === myUid)) {
           mergedMap.set(d.id, d);
         }
       });
 
       const result = Array.from(mergedMap.values());
-      try {
-        localStorage.setItem(`docuvault_cached_shared_by_me_${user?.id || 'guest'}`, JSON.stringify(result));
-      } catch (e) {}
+      if (result.length > 0) {
+        try {
+          localStorage.setItem(`docuvault_cached_shared_by_me_${user?.id || 'guest'}`, JSON.stringify(result));
+        } catch (e) {}
+      }
       return result;
     },
     enabled: isAuthenticated,
@@ -448,6 +488,8 @@ export const AppContent: React.FC = () => {
             <VaultScreen
               documents={documents}
               sharedWithMe={sharedWithMe}
+              sharedByMe={sharedByMe}
+              user={user}
               selectedCategory={selectedCategory}
               onSelectCategory={cat => setSelectedCategory(cat)}
               onOpenUpload={(isFamily) => {
@@ -457,6 +499,7 @@ export const AppContent: React.FC = () => {
               onOpenDocument={doc => setSelectedDocForDetails(doc)}
               onOpenQRShare={doc => setSelectedDocForShare(doc)}
               onOpenAssistant={() => setIsAssistantOpen(true)}
+              onOpenScan={() => setIsScanOpen(true)}
               onRefresh={handleRefreshAll}
             />
           )}
@@ -474,6 +517,7 @@ export const AppContent: React.FC = () => {
               onOpenInvite={fId => setInviteFamilyId(fId)}
               onOpenDocument={doc => setSelectedDocForDetails(doc)}
               onOpenEmergencyAccess={() => setIsEmergencyAccessOpen(true)}
+              onOpenScan={() => setIsScanOpen(true)}
             />
           )}
 
@@ -536,6 +580,10 @@ export const AppContent: React.FC = () => {
           onClose={() => {
             setIsScanOpen(false);
             setScanToken(null);
+          }}
+          onRefresh={handleRefreshAll}
+          onSuccess={(title) => {
+            showToast(`Document "${title || 'Shared Document'}" saved to your vault!`);
           }}
         />
 

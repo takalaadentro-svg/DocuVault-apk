@@ -1102,6 +1102,19 @@ class ApiService {
     };
   }
 
+  async importSharedDocument(token: string, options?: { is_family_vault?: boolean; pin?: string }): Promise<DocumentItem> {
+    const cleanToken = extractShareToken(token);
+    const res = await this.request<any>(`/share/public/${cleanToken}/import`, {
+      method: 'POST',
+      body: JSON.stringify({
+        is_family_vault: Boolean(options?.is_family_vault),
+        isFamilyVault: Boolean(options?.is_family_vault),
+        pin: options?.pin
+      })
+    });
+    return this.normalizeDocument(res);
+  }
+
   // Notifications & Stats
   normalizeNotification(item: any): NotificationItem {
     return {
