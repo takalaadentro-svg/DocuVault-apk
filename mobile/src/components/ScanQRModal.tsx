@@ -5,16 +5,17 @@ import {
   ExternalLink, Copy, Check, Users 
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { api } from '../services/api';
+import { api, extractShareToken } from '../services/api';
 import { SharedDocumentViewData } from '../types';
 import { useTheme } from '../context/ThemeContext';
 
 interface ScanQRModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialToken?: string | null;
 }
 
-export const ScanQRModal: React.FC<ScanQRModalProps> = ({ isOpen, onClose }) => {
+export const ScanQRModal: React.FC<ScanQRModalProps> = ({ isOpen, onClose, initialToken }) => {
   const { colors } = useTheme();
   const [activeTab, setActiveTab] = useState<'camera' | 'manual'>('camera');
   const [tokenInput, setTokenInput] = useState('');
@@ -31,6 +32,16 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({ isOpen, onClose }) => 
 
   const qrScannerRef = useRef<Html5Qrcode | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Auto-resolve initialToken if provided via deep link
+  useEffect(() => {
+    if (isOpen && initialToken) {
+      const clean = extractShareToken(initialToken);
+      setTokenInput(clean);
+      setActiveTab('manual');
+      handleResolveToken(clean);
+    }
+  }, [isOpen, initialToken]);
 
   // Initialize or stop scanner when modal open state changes
   useEffect(() => {
@@ -116,11 +127,8 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({ isOpen, onClose }) => 
       return;
     }
 
-    // Check if it's a share link / token
-    let token = decodedText.trim();
-    if (token.includes('/share/')) {
-      token = token.split('/share/').pop()?.split('?')[0] || token;
-    }
+    // Extract robust share token
+    const token = extractShareToken(decodedText);
     setTokenInput(token);
     handleResolveToken(token);
   };
@@ -149,21 +157,19 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({ isOpen, onClose }) => 
   };
 
   const handleResolveToken = async (tokenToUse?: string) => {
-    let cleanToken = (tokenToUse || tokenInput).trim();
-    if (!cleanToken) return;
-
-    if (cleanToken.includes('/share/')) {
-      cleanToken = cleanToken.split('/share/').pop()?.split('?')[0] || cleanToken;
-    }
+    let rawToken = (tokenToUse || tokenInput).trim();
+    if (!rawToken) return;
 
     // Check if it's a family group token
-    if (cleanToken.includes('/invite/') || cleanToken.startsWith('faminv_')) {
-      const inviteToken = cleanToken.includes('/invite/') 
-        ? cleanToken.split('/invite/').pop()?.split('?')[0] || cleanToken 
-        : cleanToken;
+    if (rawToken.includes('/invite/') || rawToken.startsWith('faminv_')) {
+      const inviteToken = rawToken.includes('/invite/') 
+        ? rawToken.split('/invite/').pop()?.split('?')[0] || rawToken 
+        : rawToken;
       handleJoinFamily(inviteToken);
       return;
     }
+
+    const cleanToken = extractShareToken(rawToken);
 
     setIsLoading(true);
     setErrorMessage(null);
@@ -437,6 +443,27 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({ isOpen, onClose }) => 
                   <span style={{ fontWeight: 600, color: '#10B981' }}>Authorized</span>
                 </div>
               </div>
+
+              {sharedDoc.mime_type?.startsWith('image/') && (
+                <div style={{
+                  padding: 8,
+                  backgroundColor: '#020617',
+                  borderRadius: 12,
+                  border: `1px solid ${colors.surfaceBorder}`,
+                  textAlign: 'center',
+                  maxHeight: 220,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  <img
+                    src={sharedDoc.preview_url}
+                    alt={sharedDoc.title}
+                    style={{ maxWidth: '100%', maxHeight: 200, objectFit: 'contain', borderRadius: 8 }}
+                  />
+                </div>
+              )}
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <a

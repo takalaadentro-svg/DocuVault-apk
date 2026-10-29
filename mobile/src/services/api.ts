@@ -12,6 +12,37 @@ import {
 const BASE_URL = (import.meta as any).env?.VITE_API_URL || 
   ((import.meta as any).env?.DEV ? '/api/v1' : 'https://docuvault-spring-backend.onrender.com/api/v1');
 
+export function extractShareToken(rawText: string): string {
+  if (!rawText) return '';
+  const text = rawText.trim();
+  
+  // 1. Explicit token query param: ?token=XYZ or &token=XYZ
+  const tokenParam = text.match(/[?&]token=([a-fA-F0-9\-]+)/i);
+  if (tokenParam && tokenParam[1]) {
+    return tokenParam[1];
+  }
+
+  // 2. URLs like .../share/public/{token}/view or .../share/public/{token}
+  const publicViewMatch = text.match(/\/share\/public\/([a-fA-F0-9\-]+)/i);
+  if (publicViewMatch && publicViewMatch[1]) {
+    return publicViewMatch[1];
+  }
+
+  // 3. URLs like .../share/{token} or .../share/view/{token}
+  const shareViewMatch = text.match(/\/share\/(?:view\/)?([a-fA-F0-9\-]+)/i);
+  if (shareViewMatch && shareViewMatch[1]) {
+    return shareViewMatch[1];
+  }
+
+  // 4. Standalone 32-char hex or standard UUID format
+  const hexMatch = text.match(/\b([a-fA-F0-9]{32}|[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})\b/);
+  if (hexMatch && hexMatch[1]) {
+    return hexMatch[1];
+  }
+
+  return text;
+}
+
 class ApiService {
   private token: string | null = null;
   private cachedUser: User | null = null;
@@ -946,17 +977,82 @@ class ApiService {
   }
 
   // Share APIs
+  normalizeShareToken(item: any): ShareTokenItem {
+    const token = String(item?.token || '');
+    const backendBase = BASE_URL.startsWith('http') 
+      ? BASE_URL.replace(/\/api\/v1\/?$/, '') 
+      : 'https://docuvault-spring-backend.onrender.com';
+    const defaultShareUrl = `${backendBase}/api/v1/share/public/${token}/view`;
+    
+    let shareUrl = item?.share_url || item?.shareUrl || defaultShareUrl;
+    if (shareUrl.includes('localhost') || shareUrl.includes('vercel.app')) {
+      shareUrl = defaultShareUrl;
+    }
+
+    return {
+      id: String(item?.id || item?.token || ''),
+      document_id: String(item?.document_id || item?.documentId || ''),
+      document_title: String(item?.document_title || item?.documentTitle || 'Shared Document'),
+      document_category: String(item?.document_category || item?.documentCategory || 'General'),
+      token: token,
+      share_url: shareUrl,
+      qr_code_svg: item?.qr_code_svg || item?.qrCodeSvg,
+      qr_code_base64: item?.qr_code_base64 || item?.qrCodeBase64,
+      expires_at: item?.expires_at || item?.expiresAt,
+      max_access_count: item?.max_access_count ?? item?.maxAccessCount ?? item?.max_views ?? item?.maxViews,
+      access_count: item?.access_count ?? item?.accessCount ?? item?.viewCount ?? item?.view_count ?? 0,
+      is_revoked: Boolean(item?.is_revoked ?? item?.isRevoked ?? false),
+      require_pin: Boolean(item?.require_pin ?? item?.requirePin ?? item?.is_pin_protected ?? item?.isPinProtected ?? false),
+      created_at: item?.created_at || item?.createdAt || new Date().toISOString(),
+    };
+  }
+
+  getPublicShareViewUrl(token: string): string {
+    const backendBase = BASE_URL.startsWith('http') 
+      ? BASE_URL.replace(/\/api\/v1\/?$/, '') 
+      : 'https://docuvault-spring-backend.onrender.com';
+    return `${backendBase}/api/v1/share/public/${token}/view`;
+  }
+
+  getPublicSharePreviewUrl(token: string, pin?: string): string {
+    const backendBase = BASE_URL.startsWith('http') 
+      ? BASE_URL.replace(/\/api\/v1\/?$/, '') 
+      : 'https://docuvault-spring-backend.onrender.com';
+    return `${backendBase}/api/v1/share/public/${token}/preview${pin ? `?pin=${encodeURIComponent(pin)}` : ''}`;
+  }
+
+  getPublicShareDownloadUrl(token: string, pin?: string): string {
+    const backendBase = BASE_URL.startsWith('http') 
+      ? BASE_URL.replace(/\/api\/v1\/?$/, '') 
+      : 'https://docuvault-spring-backend.onrender.com';
+    return `${backendBase}/api/v1/share/public/${token}/download${pin ? `?pin=${encodeURIComponent(pin)}` : ''}`;
+  }
+
   async createShareToken(data: { document_id: string; expires_in_hours?: number; max_access_count?: number; pin?: string }): Promise<ShareTokenItem> {
-    return this.request<ShareTokenItem>('/share/create', {
+    const payload = {
+      document_id: data.document_id,
+      documentId: data.document_id,
+      expires_in_hours: data.expires_in_hours,
+      expiresInHours: data.expires_in_hours,
+      max_views: data.max_access_count,
+      maxViews: data.max_access_count,
+      max_access_count: data.max_access_count,
+      pin: data.pin,
+    };
+    const res = await this.request<any>('/share/create', {
       method: 'POST',
-      body: JSON.stringify(data)
+      body: JSON.stringify(payload)
     });
+    return this.normalizeShareToken(res);
   }
 
   async getActiveShares(): Promise<ShareTokenItem[]> {
     try {
-      const res = await this.request<ShareTokenItem[]>('/share/active');
-      return Array.isArray(res) ? res : [];
+      const res = await this.request<any[]>('/share/active');
+      if (Array.isArray(res)) {
+        return res.map(item => this.normalizeShareToken(item));
+      }
+      return [];
     } catch (e) {
       return [];
     }
@@ -969,10 +1065,41 @@ class ApiService {
   }
 
   async viewSharedDocument(token: string, pin?: string): Promise<SharedDocumentViewData> {
-    return this.request<SharedDocumentViewData>(`/share/view/${token}`, {
+    const cleanToken = extractShareToken(token);
+    const res = await this.request<any>(`/share/view/${cleanToken}`, {
       method: 'POST',
-      body: JSON.stringify({ pin })
+      body: JSON.stringify({ pin: pin || undefined })
     });
+
+    const backendBase = BASE_URL.startsWith('http') 
+      ? BASE_URL.replace(/\/api\/v1\/?$/, '') 
+      : 'https://docuvault-spring-backend.onrender.com';
+    
+    let previewUrl = String(res?.preview_url || res?.previewUrl || '');
+    if (previewUrl.startsWith('/')) {
+      previewUrl = backendBase + previewUrl;
+    }
+    let downloadUrl = String(res?.download_url || res?.downloadUrl || '');
+    if (downloadUrl.startsWith('/')) {
+      downloadUrl = backendBase + downloadUrl;
+    }
+
+    return {
+      id: String(res?.id || ''),
+      title: String(res?.title || 'Shared Document'),
+      category: String(res?.category || 'General'),
+      issuer: res?.issuer,
+      issue_date: res?.issue_date || res?.issueDate,
+      expiry_date: res?.expiry_date || res?.expiryDate,
+      owner_name: res?.owner_name || res?.ownerName || 'DocuVault Verified Member',
+      mime_type: res?.mime_type || res?.mimeType || 'application/pdf',
+      file_size: Number(res?.file_size || res?.fileSize || 0),
+      download_url: downloadUrl,
+      preview_url: previewUrl,
+      expires_at: res?.expires_at || res?.expiresAt,
+      access_count: Number(res?.access_count || res?.accessCount || 1),
+      max_access_count: res?.max_access_count ?? res?.maxAccessCount,
+    };
   }
 
   // Notifications & Stats

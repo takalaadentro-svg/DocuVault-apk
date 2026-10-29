@@ -38,6 +38,7 @@ export const AppContent: React.FC = () => {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [uploadDefaultFamily, setUploadDefaultFamily] = useState(false);
   const [isScanOpen, setIsScanOpen] = useState(false);
+  const [scanToken, setScanToken] = useState<string | null>(null);
   const [selectedDocForDetails, setSelectedDocForDetails] = useState<DocumentItem | null>(null);
   const [selectedDocForShare, setSelectedDocForShare] = useState<DocumentItem | null>(null);
   const [inviteFamilyId, setInviteFamilyId] = useState<string | null>(null);
@@ -54,6 +55,22 @@ export const AppContent: React.FC = () => {
   React.useEffect(() => {
     const handleUrl = (urlStr: string) => {
       try {
+        if (!urlStr) return;
+
+        // 1. Check for shared document token
+        if (urlStr.includes('/share/') || urlStr.includes('share?token=') || urlStr.includes('share=')) {
+          const match = urlStr.match(/[?&]token=([a-fA-F0-9\-]+)/i) ||
+                        urlStr.match(/\/share\/(?:public\/)?([a-fA-F0-9\-]+)/i);
+          if (match && match[1]) {
+            const token = match[1];
+            setScanToken(token);
+            setIsScanOpen(true);
+            showToast('Shared document detected! Opening viewer...');
+            return;
+          }
+        }
+
+        // 2. Family invitation token
         const match = urlStr.match(/token=([a-zA-Z0-9\-]+)/);
         if (match && match[1]) {
           const token = match[1];
@@ -309,7 +326,21 @@ export const AppContent: React.FC = () => {
   }
 
   if (!isAuthenticated) {
-    return <AuthScreen />;
+    return (
+      <>
+        <AuthScreen />
+        {isScanOpen && (
+          <ScanQRModal
+            isOpen={isScanOpen}
+            initialToken={scanToken}
+            onClose={() => {
+              setIsScanOpen(false);
+              setScanToken(null);
+            }}
+          />
+        )}
+      </>
+    );
   }
 
   const isSampleNotification = (n: any) => {
@@ -501,7 +532,11 @@ export const AppContent: React.FC = () => {
 
         <ScanQRModal
           isOpen={isScanOpen}
-          onClose={() => setIsScanOpen(false)}
+          initialToken={scanToken}
+          onClose={() => {
+            setIsScanOpen(false);
+            setScanToken(null);
+          }}
         />
 
         <FamilyInviteModal

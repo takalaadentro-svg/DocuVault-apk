@@ -45,7 +45,10 @@ public class ShareService {
     @Autowired
     private AuditLogRepository auditLogRepository;
 
-    @org.springframework.beans.factory.annotation.Value("${digivault.frontend.url:https://docuvault-apk.vercel.app}")
+    @org.springframework.beans.factory.annotation.Value("${digivault.backend.url:https://docuvault-spring-backend.onrender.com}")
+    private String backendUrl;
+
+    @org.springframework.beans.factory.annotation.Value("${digivault.frontend.url:}")
     private String frontendUrl;
 
     public ShareResponse createShareToken(User user, CreateShareRequest req) {
@@ -70,20 +73,43 @@ public class ShareService {
 
         shareTokenRepository.save(shareToken);
 
-        String base = (frontendUrl != null && !frontendUrl.trim().isEmpty()) ? frontendUrl.trim() : "https://docuvault-apk.vercel.app";
+        String base = (backendUrl != null && !backendUrl.trim().isEmpty()) 
+                ? backendUrl.trim() 
+                : "https://docuvault-spring-backend.onrender.com";
         if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
-        String shareUrl = base + "/share/" + token;
-        String qrBase64 = generateQrCodeBase64(shareUrl, 250, 250);
+        String shareUrl = base + "/api/v1/share/public/" + token + "/view";
+        String qrBase64 = generateQrCodeBase64(shareUrl, 280, 280);
 
         ShareResponse response = new ShareResponse();
+        response.setId(shareToken.getId());
         response.setToken(token);
         response.setShareUrl(shareUrl);
         response.setQrCodeBase64(qrBase64);
         response.setExpiresAt(shareToken.getExpiresAt());
         response.setMaxViews(shareToken.getMaxViews());
+        response.setAccessCount(0);
         response.setPinProtected(shareToken.getPinHash() != null);
+        response.setRevoked(!shareToken.isActive());
+        response.setDocumentId(doc.getId());
+        response.setDocumentTitle(doc.getTitle());
+        response.setDocumentCategory(doc.getCategory());
+        response.setCreatedAt(shareToken.getCreatedAt());
 
         return response;
+    }
+
+    public Optional<ShareToken> findToken(String token) {
+        return shareTokenRepository.findByToken(token);
+    }
+
+    public boolean isPinRequired(ShareToken shareToken) {
+        return shareToken != null && shareToken.getPinHash() != null && !shareToken.getPinHash().trim().isEmpty();
+    }
+
+    public boolean verifyPin(ShareToken shareToken, String pin) {
+        if (!isPinRequired(shareToken)) return true;
+        if (pin == null || pin.trim().isEmpty()) return false;
+        return passwordEncoder.matches(pin.trim(), shareToken.getPinHash());
     }
 
     public DocumentRecord accessPublicDocumentRecord(String token, String pin) {

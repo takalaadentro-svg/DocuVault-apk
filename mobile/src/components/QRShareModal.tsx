@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, QrCode, Copy, Check, ShieldCheck, Clock, Eye, Lock, AlertCircle, Trash2 } from 'lucide-react';
+import { X, QrCode, Copy, Check, ShieldCheck, Clock, Eye, Lock, AlertCircle, Trash2, Share2, ExternalLink } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { Share } from '@capacitor/share';
 import { DocumentItem, ShareTokenItem } from '../types';
 import { api } from '../services/api';
 import { useTheme } from '../context/ThemeContext';
@@ -66,12 +67,41 @@ export const QRShareModal: React.FC<QRShareModalProps> = ({
     }
   };
 
+  const fullShareUrl = createdShare 
+    ? (createdShare.share_url && !createdShare.share_url.includes('localhost') 
+        ? createdShare.share_url 
+        : api.getPublicShareViewUrl(createdShare.token))
+    : '';
+
   const handleCopyLink = () => {
-    if (!createdShare) return;
-    const fullUrl = `${window.location.origin}/share/${createdShare.token}`;
-    navigator.clipboard.writeText(fullUrl);
+    if (!fullShareUrl) return;
+    navigator.clipboard.writeText(fullShareUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleShareViaApp = async () => {
+    if (!fullShareUrl) return;
+    try {
+      await Share.share({
+        title: `DocuVault: ${initialDoc.title}`,
+        text: `Access securely shared document "${initialDoc.title}" via DocuVault:`,
+        url: fullShareUrl,
+        dialogTitle: 'Share Document with DocuVault',
+      });
+    } catch (e) {
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: `DocuVault: ${initialDoc.title}`,
+            text: `Access securely shared document "${initialDoc.title}":`,
+            url: fullShareUrl,
+          });
+          return;
+        } catch (ignored) {}
+      }
+      handleCopyLink();
+    }
   };
 
   const handleRevokeShare = async (shareId: string) => {
@@ -85,10 +115,6 @@ export const QRShareModal: React.FC<QRShareModalProps> = ({
       alert(e.message || 'Failed to revoke share link');
     }
   };
-
-  const fullShareUrl = createdShare 
-    ? `${window.location.origin}/share/${createdShare.token}`
-    : '';
 
   return (
     <div style={{
@@ -243,6 +269,25 @@ export const QRShareModal: React.FC<QRShareModalProps> = ({
                       style={{
                         padding: '6px 12px',
                         borderRadius: 6,
+                        backgroundColor: colors.surface,
+                        border: `1px solid ${colors.surfaceBorder}`,
+                        color: colors.text,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      {copied ? <Check size={14} color="#10B981" /> : <Copy size={14} />}
+                      <span>{copied ? 'Copied!' : 'Copy'}</span>
+                    </button>
+                    <button
+                      onClick={handleShareViaApp}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: 6,
                         backgroundColor: colors.accent,
                         color: '#FFF',
                         border: 'none',
@@ -254,8 +299,8 @@ export const QRShareModal: React.FC<QRShareModalProps> = ({
                         gap: 4,
                       }}
                     >
-                      {copied ? <Check size={14} /> : <Copy size={14} />}
-                      <span>{copied ? 'Copied!' : 'Copy'}</span>
+                      <Share2 size={14} />
+                      <span>Share</span>
                     </button>
                   </div>
 
@@ -493,32 +538,60 @@ export const QRShareModal: React.FC<QRShareModalProps> = ({
                   >
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 700, color: colors.text }}>
-                        {share.document_title}
+                        {share.document_title || initialDoc.title || 'Shared Document'}
                       </div>
                       <div style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
-                        Views: {share.access_count} {share.max_access_count ? `/ ${share.max_access_count}` : ''} • 
+                        Views: {share.access_count ?? 0} {share.max_access_count ? `/ ${share.max_access_count}` : ''} • 
                         Expires: {share.expires_at ? new Date(share.expires_at).toLocaleDateString() : 'Never'}
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleRevokeShare(share.id)}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: 8,
-                        backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                        border: '1px solid rgba(239, 68, 68, 0.3)',
-                        color: colors.danger,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                      }}
-                    >
-                      <Trash2 size={13} />
-                      <span>Revoke</span>
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = share.share_url && !share.share_url.includes('localhost') 
+                            ? share.share_url 
+                            : api.getPublicShareViewUrl(share.token);
+                          navigator.clipboard.writeText(url);
+                          alert('Share link copied to clipboard!');
+                        }}
+                        style={{
+                          padding: '6px 10px',
+                          borderRadius: 8,
+                          backgroundColor: colors.surface,
+                          border: `1px solid ${colors.surfaceBorder}`,
+                          color: colors.text,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
+                      >
+                        <Copy size={13} />
+                        <span>Copy</span>
+                      </button>
+                      <button
+                        onClick={() => handleRevokeShare(share.id)}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: 8,
+                          backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                          color: colors.danger,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
+                      >
+                        <Trash2 size={13} />
+                        <span>Revoke</span>
+                      </button>
+                    </div>
                   </div>
                 ))
               ) : (
