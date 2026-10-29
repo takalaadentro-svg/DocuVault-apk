@@ -7,6 +7,15 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: 'https',
     cleartext: true
+  },
+  plugins: {
+    LocalNotifications: {
+      smallIcon: 'ic_launcher',
+      iconColor: '#0D9488'
+    },
+    PushNotifications: {
+      presentationOptions: ['badge', 'sound', 'alert']
+    }
   }
 };
 

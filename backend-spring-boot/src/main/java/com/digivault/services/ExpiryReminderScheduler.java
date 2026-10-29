@@ -40,6 +40,7 @@ public class ExpiryReminderScheduler {
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
 
     @Scheduled(cron = "${digivault.scheduler.expiry-cron:0 0 8 * * ?}")
+    @Scheduled(fixedRateString = "${digivault.scheduler.expiry-rate-ms:1800000}", initialDelay = 30000)
     public void checkDocumentExpiries() {
         logger.info("Executing DocuVault 2.0 scheduled Document Expiry check across all users...");
         List<DocumentRecord> allDocsWithExpiry = documentRepository.findByExpiryDateNotNull();
@@ -129,15 +130,21 @@ public class ExpiryReminderScheduler {
             }
         }
 
+        boolean shouldSendPush = false;
         if (target != null) {
-            // Update existing notification with fresh countdown and unread status if days changed
-            target.setTitle(title);
-            target.setMessage(message);
-            target.setType(type);
-            target.setCreatedAt(new Date());
-            notificationRepository.save(target);
-            logger.info("Updated existing expiry notification for '{}' ({} days left)", doc.getTitle(), daysLeft);
+            boolean titleChanged = !title.equals(target.getTitle());
+            long ageMs = target.getCreatedAt() != null ? (now.getTime() - target.getCreatedAt().getTime()) : Long.MAX_VALUE;
+            if (titleChanged || ageMs >= 6 * 3600 * 1000L) {
+                shouldSendPush = true;
+                target.setTitle(title);
+                target.setMessage(message);
+                target.setType(type);
+                target.setCreatedAt(now);
+                notificationRepository.save(target);
+                logger.info("Updated existing expiry notification for '{}' ({} days left)", doc.getTitle(), daysLeft);
+            }
         } else {
+            shouldSendPush = true;
             Notification notification = new Notification(
                     doc.getUserId(),
                     title,
@@ -153,7 +160,7 @@ public class ExpiryReminderScheduler {
         }
 
         // Dispatch FCM Push Notification to user's registered phone
-        if (fcmService != null && doc.getUserId() != null) {
+        if (shouldSendPush && fcmService != null && doc.getUserId() != null) {
             try {
                 userRepository.findById(doc.getUserId()).ifPresent(u -> {
                     if (u.getFcmToken() != null && !u.getFcmToken().trim().isEmpty()) {

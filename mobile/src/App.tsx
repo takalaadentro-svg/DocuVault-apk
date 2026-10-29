@@ -24,7 +24,7 @@ import { FamilyInviteModal } from './components/FamilyInviteModal';
 import { EmergencyAccessModal } from './components/EmergencyAccessModal';
 import { BiometricLockOverlay } from './components/BiometricLockOverlay';
 import { AssistantModal } from './components/AssistantModal';
-import { initializePushNotifications, checkAndNotifyExpiries } from './services/pushNotifications';
+import { initializePushNotifications, checkAndNotifyExpiries, onNotificationTapped } from './services/pushNotifications';
 
 export const AppContent: React.FC = () => {
   const { user, isAuthenticated, isLoading: authLoading, isLocked } = useAuth();
@@ -102,6 +102,13 @@ export const AppContent: React.FC = () => {
   // Initialize push notification services on app mount
   React.useEffect(() => {
     initializePushNotifications();
+    const unsubscribeTap = onNotificationTapped(({ documentId }) => {
+      setCurrentTab('alerts');
+      if (documentId) {
+        handleOpenDocumentById(String(documentId));
+      }
+    });
+    return () => unsubscribeTap();
   }, []);
 
   // Queries with Real-time automatic updates (every 12 seconds)
