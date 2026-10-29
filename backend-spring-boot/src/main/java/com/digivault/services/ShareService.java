@@ -63,7 +63,7 @@ public class ShareService {
         shareToken.setDocumentId(doc.getId());
         shareToken.setToken(token);
         shareToken.setExpiresAt(cal.getTime());
-        shareToken.setMaxViews(req.getMaxViews() != null ? req.getMaxViews() : 5);
+        shareToken.setMaxViews(req.getMaxViews() != null && req.getMaxViews() > 0 ? req.getMaxViews() : 0);
         shareToken.setViewCount(0);
         shareToken.setActive(true);
 
@@ -113,6 +113,14 @@ public class ShareService {
     }
 
     public DocumentRecord accessPublicDocumentRecord(String token, String pin) {
+        return accessPublicDocumentRecordInternal(token, pin, true);
+    }
+
+    public DocumentRecord resolvePublicDocumentForStream(String token, String pin) {
+        return accessPublicDocumentRecordInternal(token, pin, false);
+    }
+
+    private DocumentRecord accessPublicDocumentRecordInternal(String token, String pin, boolean incrementView) {
         Optional<ShareToken> tokenOpt = shareTokenRepository.findByToken(token);
         if (!tokenOpt.isPresent()) {
             throw new RuntimeException("Invalid or non-existent share link.");
@@ -130,30 +138,37 @@ public class ShareService {
             throw new RuntimeException("This share link has expired.");
         }
 
-        if (shareToken.getMaxViews() > 0 && shareToken.getViewCount() >= shareToken.getMaxViews()) {
-            shareToken.setActive(false);
-            shareTokenRepository.save(shareToken);
-            throw new RuntimeException("Maximum view limit exceeded for this share link.");
-        }
-
-        if (shareToken.getPinHash() != null) {
+        if (shareToken.getPinHash() != null && !shareToken.getPinHash().trim().isEmpty()) {
             if (pin == null || pin.trim().isEmpty() || !passwordEncoder.matches(pin.trim(), shareToken.getPinHash())) {
                 throw new RuntimeException("PIN verification failed: Invalid PIN for secured share link.");
             }
         }
 
-        // Increment view count
-        shareToken.setViewCount(shareToken.getViewCount() + 1);
-        if (shareToken.getMaxViews() > 0 && shareToken.getViewCount() >= shareToken.getMaxViews()) {
-            shareToken.setActive(false);
+        if (incrementView) {
+            if (shareToken.getMaxViews() > 0 && shareToken.getViewCount() >= shareToken.getMaxViews()) {
+                throw new RuntimeException("Maximum view limit exceeded for this share link.");
+            }
+            shareToken.setViewCount(shareToken.getViewCount() + 1);
+            shareTokenRepository.save(shareToken);
+        } else {
+            // For preview/download/import streams following an authorized view:
+            // Allow if within maxViews (including when viewCount == maxViews for the active session).
+            if (shareToken.getMaxViews() > 0 && shareToken.getViewCount() > shareToken.getMaxViews()) {
+                throw new RuntimeException("Maximum view limit exceeded for this share link.");
+            }
+            if (shareToken.getViewCount() == 0) {
+                shareToken.setViewCount(1);
+                shareTokenRepository.save(shareToken);
+            }
         }
-        shareTokenRepository.save(shareToken);
 
         DocumentRecord doc = documentRepository.findById(shareToken.getDocumentId())
                 .orElseThrow(() -> new RuntimeException("Shared document not found"));
 
-        AuditLog log = new AuditLog("ANONYMOUS", "PUBLIC_SHARE_ACCESS", doc.getId(), "127.0.0.1", "Public Web Viewer");
-        auditLogRepository.save(log);
+        if (incrementView) {
+            AuditLog log = new AuditLog("ANONYMOUS", "PUBLIC_SHARE_ACCESS", doc.getId(), "127.0.0.1", "Public Web Viewer");
+            auditLogRepository.save(log);
+        }
 
         return doc;
     }

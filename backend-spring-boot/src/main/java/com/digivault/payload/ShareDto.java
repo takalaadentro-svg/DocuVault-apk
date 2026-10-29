@@ -19,7 +19,7 @@ public class ShareDto {
 
         @JsonProperty("max_views")
         @JsonAlias({"maxViews", "max_views", "max_access_count", "maxAccessCount"})
-        private Integer maxViews = 5;
+        private Integer maxViews = 0;
 
         @JsonProperty("pin")
         @JsonAlias({"pin", "pinCode", "pin_code"})

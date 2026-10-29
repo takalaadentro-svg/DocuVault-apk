@@ -144,7 +144,7 @@ public class DocumentService {
             record.setFileSize(file.getSize());
             record.setMimeType(file.getContentType());
             record.setSha256Hash(sha256);
-            if (fileBytes != null && fileBytes.length < 3 * 1024 * 1024) {
+            if (fileBytes != null && fileBytes.length < 12 * 1024 * 1024) {
                 record.setBase64Data(Base64.getEncoder().encodeToString(fileBytes));
             }
             String rawOcr = (clientOcrText != null && clientOcrText.trim().length() > 5)

@@ -7,6 +7,7 @@ import com.digivault.payload.DocumentDto.DocumentResponse;
 import com.digivault.payload.ShareDto.*;
 import com.digivault.repositories.DocumentRepository;
 import com.digivault.repositories.ShareTokenRepository;
+import com.digivault.services.DocumentService;
 import com.digivault.services.ShareService;
 import com.digivault.services.StorageService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,8 +17,11 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.util.StreamUtils;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Date;
@@ -146,7 +150,25 @@ public class ShareController {
                 }
             }
 
-            DocumentResponse doc = shareService.accessPublicDocument(token, pin);
+            DocumentRecord doc = shareService.accessPublicDocumentRecord(token, pin);
+            Optional<ShareToken> updatedTokenOpt = shareService.findToken(token);
+            ShareToken st = updatedTokenOpt.orElse(null);
+
+            MediaType resolvedMedia = resolveMediaType(doc);
+            String mimeType = resolvedMedia != null ? resolvedMedia.toString() : (doc.getMimeType() != null ? doc.getMimeType() : "application/pdf");
+
+            String base64Payload = doc.getBase64Data();
+            if (base64Payload == null || base64Payload.trim().isEmpty()) {
+                try {
+                    Resource res = resolveDocumentResource(doc);
+                    if (res != null && res.exists()) {
+                        byte[] bytes = StreamUtils.copyToByteArray(res.getInputStream());
+                        if (bytes.length > 0 && bytes.length <= 10 * 1024 * 1024) {
+                            base64Payload = Base64.getEncoder().encodeToString(bytes);
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
 
             String pinParam = (pin != null && !pin.trim().isEmpty()) ? "?pin=" + pin.trim() : "";
             Map<String, Object> resp = new HashMap<>();
@@ -154,17 +176,24 @@ public class ShareController {
             resp.put("title", doc.getTitle());
             resp.put("category", doc.getCategory());
             resp.put("issuer", doc.getIssuer());
+            resp.put("holder_name", doc.getHolderName());
+            resp.put("doc_number", doc.getDocNumber());
+            resp.put("dob", doc.getDob());
+            resp.put("ocr_text", doc.getOcrText());
+            resp.put("sha256_hash", doc.getSha256Hash());
+            resp.put("original_filename", doc.getOriginalFilename());
             resp.put("issue_date", doc.getIssueDate());
             resp.put("expiry_date", doc.getExpiryDate());
             resp.put("owner_name", "DocuVault Verified Member");
-            resp.put("mime_type", doc.getMimeType() != null ? doc.getMimeType() : "application/pdf");
+            resp.put("mime_type", mimeType);
             resp.put("file_size", doc.getFileSize());
+            resp.put("base64_data", base64Payload);
             resp.put("download_url", "https://docuvault-spring-backend.onrender.com/api/v1/share/public/" + token + "/download" + pinParam);
             resp.put("preview_url", "https://docuvault-spring-backend.onrender.com/api/v1/share/public/" + token + "/preview" + pinParam);
             resp.put("share_url", "https://docuvault-spring-backend.onrender.com/api/v1/share/public/" + token + "/view");
-            resp.put("expires_at", doc.getExpiryDate());
-            resp.put("access_count", 1);
-            resp.put("max_access_count", 5);
+            resp.put("expires_at", st != null ? st.getExpiresAt() : doc.getExpiryDate());
+            resp.put("access_count", st != null ? st.getViewCount() : 1);
+            resp.put("max_access_count", (st != null && st.getMaxViews() > 0) ? st.getMaxViews() : null);
 
             return ResponseEntity.ok(resp);
         } catch (Exception e) {
@@ -198,7 +227,7 @@ public class ShareController {
             }
         }
         try {
-            DocumentRecord originalDoc = shareService.accessPublicDocumentRecord(token, pin);
+            DocumentRecord originalDoc = shareService.resolvePublicDocumentForStream(token, pin);
             DocumentRecord imported = new DocumentRecord();
             imported.setUserId(user.getId());
             imported.setTitle(originalDoc.getTitle());
@@ -309,7 +338,8 @@ public class ShareController {
         String hash = doc.getSha256Hash() != null && doc.getSha256Hash().length() >= 16 
                 ? doc.getSha256Hash().substring(0, 16) + "..." 
                 : "Verified Intact";
-        String mimeType = doc.getMimeType() != null ? doc.getMimeType() : "application/pdf";
+        MediaType resolvedMedia = resolveMediaType(doc);
+        String mimeType = resolvedMedia != null ? resolvedMedia.toString() : (doc.getMimeType() != null ? doc.getMimeType() : "application/pdf");
         boolean isImage = mimeType.startsWith("image/");
         boolean isPdf = mimeType.contains("pdf");
 
@@ -362,7 +392,11 @@ public class ShareController {
         sb.append("      <div class=\"meta-item\"><span class=\"meta-label\">Views</span><span class=\"meta-value\">").append(st.getViewCount()).append(" / ").append(st.getMaxViews() > 0 ? st.getMaxViews() : "Unlimited").append("</span></div>\n");
         sb.append("    </div>\n");
         sb.append("    <div class=\"actions-row\">\n");
-        sb.append("      <a href=\"").append(downloadUrl).append("\" class=\"btn btn-primary\" download>\n");
+        sb.append("      <a href=\"").append(previewUrl).append("\" target=\"_blank\" rel=\"noopener\" class=\"btn btn-primary\">\n");
+        sb.append("        <svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/></svg>\n");
+        sb.append("        View / Preview Document\n");
+        sb.append("      </a>\n");
+        sb.append("      <a href=\"").append(downloadUrl).append("\" class=\"btn btn-secondary\" download>\n");
         sb.append("        <svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><polyline points=\"7 10 12 15 17 10\"/><line x1=\"12\" y1=\"15\" x2=\"12\" y2=\"3\"/></svg>\n");
         sb.append("        Download Document\n");
         sb.append("      </a>\n");
@@ -371,11 +405,43 @@ public class ShareController {
         sb.append("        Open in DocuVault App\n");
         sb.append("      </a>\n");
         sb.append("    </div>\n");
-        sb.append("    <div class=\"preview-box\">\n");
+        sb.append("    <div class=\"preview-box\" id=\"preview-container\" style=\"flex-direction: column; padding: 12px;\">\n");
         if (isImage) {
             sb.append("      <img src=\"").append(previewUrl).append("\" alt=\"").append(title).append("\" class=\"preview-img\" />\n");
         } else if (isPdf) {
-            sb.append("      <iframe src=\"").append(previewUrl).append("\" class=\"preview-frame\"></iframe>\n");
+            sb.append("      <div id=\"pdf-canvas-wrapper\" style=\"width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px;\"></div>\n");
+            sb.append("      <noscript><iframe src=\"").append(previewUrl).append("\" class=\"preview-frame\"></iframe></noscript>\n");
+            sb.append("      <script src=\"https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js\"></script>\n");
+            sb.append("      <script>\n");
+            sb.append("        (function() {\n");
+            sb.append("          var url = '").append(previewUrl).append("';\n");
+            sb.append("          var wrapper = document.getElementById('pdf-canvas-wrapper');\n");
+            sb.append("          if (window.pdfjsLib) {\n");
+            sb.append("            window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';\n");
+            sb.append("            window.pdfjsLib.getDocument(url).promise.then(function(pdf) {\n");
+            sb.append("              for (var p = 1; p <= pdf.numPages; p++) {\n");
+            sb.append("                (function(pageNum) {\n");
+            sb.append("                  pdf.getPage(pageNum).then(function(page) {\n");
+            sb.append("                    var viewport = page.getViewport({ scale: 1.5 });\n");
+            sb.append("                    var canvas = document.createElement('canvas');\n");
+            sb.append("                    canvas.style.maxWidth = '100%';\n");
+            sb.append("                    canvas.style.height = 'auto';\n");
+            sb.append("                    canvas.style.borderRadius = '8px';\n");
+            sb.append("                    canvas.height = viewport.height;\n");
+            sb.append("                    canvas.width = viewport.width;\n");
+            sb.append("                    wrapper.appendChild(canvas);\n");
+            sb.append("                    page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport });\n");
+            sb.append("                  });\n");
+            sb.append("                })(p);\n");
+            sb.append("              }\n");
+            sb.append("            }).catch(function() {\n");
+            sb.append("              wrapper.innerHTML = '<iframe src=\"' + url + '\" class=\"preview-frame\"></iframe>';\n");
+            sb.append("            });\n");
+            sb.append("          } else {\n");
+            sb.append("            wrapper.innerHTML = '<iframe src=\"' + url + '\" class=\"preview-frame\"></iframe>';\n");
+            sb.append("          }\n");
+            sb.append("        })();\n");
+            sb.append("      </script>\n");
         } else {
             sb.append("      <div style=\"padding: 40px; text-align: center;\">\n");
             sb.append("        <p style=\"color: var(--muted); margin-bottom: 12px;\">Document preview is not available in browser.</p>\n");
@@ -485,26 +551,98 @@ public class ShareController {
             try {
                 byte[] bytes = Base64.getDecoder().decode(doc.getBase64Data());
                 storageService.restoreFile(doc.getStoredFilename(), bytes);
-                return new ByteArrayResource(bytes);
+                return new ByteArrayResource(bytes) {
+                    @Override
+                    public String getFilename() {
+                        return doc.getOriginalFilename() != null ? doc.getOriginalFilename() : "document.pdf";
+                    }
+                };
             } catch (Exception e) {
                 // fall through
             }
         }
 
-        return storageService.loadFileAsResource(doc.getStoredFilename());
+        try {
+            return storageService.loadFileAsResource(doc.getStoredFilename());
+        } catch (Exception ex) {
+            byte[] fallbackPdf = generateFallbackPdfBytes(doc);
+            return new ByteArrayResource(fallbackPdf) {
+                @Override
+                public String getFilename() {
+                    return doc.getOriginalFilename() != null ? doc.getOriginalFilename() : "document.pdf";
+                }
+            };
+        }
+    }
+
+    private String sanitizePdfText(String input) {
+        if (input == null) return "";
+        return input.replace("\\", "\\\\")
+                .replace("(", "\\(")
+                .replace(")", "\\)")
+                .replaceAll("[^\\x20-\\x7E]", " ");
+    }
+
+    private byte[] generateFallbackPdfBytes(DocumentRecord doc) {
+        String title = sanitizePdfText(doc.getTitle() != null ? doc.getTitle() : "DocuVault Verified Record");
+        String category = sanitizePdfText(doc.getCategory() != null ? doc.getCategory() : "Identity");
+        String issuer = sanitizePdfText(doc.getIssuer() != null && !doc.getIssuer().isEmpty() ? doc.getIssuer() : "Official Issuer");
+        String holder = sanitizePdfText(doc.getHolderName() != null && !doc.getHolderName().isEmpty() ? doc.getHolderName() : "Verified Holder");
+        String docNum = sanitizePdfText(doc.getDocNumber() != null && !doc.getDocNumber().isEmpty() ? doc.getDocNumber() : "N/A");
+        String dob = sanitizePdfText(doc.getDob() != null && !doc.getDob().isEmpty() ? doc.getDob() : "N/A");
+        String hash = sanitizePdfText(doc.getSha256Hash() != null ? doc.getSha256Hash() : "Verified Intact");
+
+        StringBuilder stream = new StringBuilder();
+        stream.append("BT\n/F1 18 Tf\n50 750 Td\n(DocuVault Official Verified Record) Tj\n");
+        stream.append("/F1 14 Tf\n0 -32 Td\n(Title: ").append(title).append(") Tj\n");
+        stream.append("/F1 11 Tf\n0 -24 Td\n(Category: ").append(category).append(") Tj\n");
+        stream.append("0 -18 Td\n(Issuer: ").append(issuer).append(") Tj\n");
+        stream.append("0 -18 Td\n(Holder Name: ").append(holder).append(") Tj\n");
+        stream.append("0 -18 Td\n(Document Number: ").append(docNum).append(") Tj\n");
+        stream.append("0 -18 Td\n(Date of Birth: ").append(dob).append(") Tj\n");
+        stream.append("0 -24 Td\n(SHA-256 DNA: ").append(hash).append(") Tj\n");
+        if (doc.getOcrText() != null && !doc.getOcrText().trim().isEmpty()) {
+            String cleanOcr = sanitizePdfText(doc.getOcrText().trim());
+            stream.append("0 -28 Td\n(Extracted Document Content:) Tj\n");
+            int idx = 0;
+            int lines = 0;
+            while (idx < cleanOcr.length() && lines < 18) {
+                int end = Math.min(idx + 75, cleanOcr.length());
+                stream.append("0 -15 Td\n(").append(cleanOcr.substring(idx, end)).append(") Tj\n");
+                idx = end;
+                lines++;
+            }
+        }
+        stream.append("ET\n");
+        String content = stream.toString();
+
+        String pdf = "%PDF-1.4\n" +
+                "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n" +
+                "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n" +
+                "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj\n" +
+                "4 0 obj << /Length " + content.length() + " >> stream\n" +
+                content +
+                "endstream endobj\n" +
+                "5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n" +
+                "xref\n0 6\n0000000000 65535 f \n" +
+                "trailer << /Size 6 /Root 1 0 R >>\nstartxref\n0\n%%EOF";
+        return pdf.getBytes(StandardCharsets.ISO_8859_1);
     }
 
     @GetMapping("/public/{token}/download")
     public ResponseEntity<Resource> downloadPublicDocument(
             @PathVariable("token") String token,
             @RequestParam(value = "pin", required = false) String pin) {
-        DocumentRecord doc = shareService.accessPublicDocumentRecord(token, pin);
+        DocumentRecord doc = shareService.resolvePublicDocumentForStream(token, pin);
         Resource resource = resolveDocumentResource(doc);
         MediaType mediaType = resolveMediaType(doc);
+        String filename = (doc.getOriginalFilename() != null && !doc.getOriginalFilename().trim().isEmpty())
+                ? doc.getOriginalFilename()
+                : ((doc.getTitle() != null ? doc.getTitle().replaceAll("[^a-zA-Z0-9._-]", "_") : "document") + ".pdf");
 
         return ResponseEntity.ok()
                 .contentType(mediaType)
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + doc.getOriginalFilename() + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
                 .body(resource);
     }
 
@@ -512,13 +650,16 @@ public class ShareController {
     public ResponseEntity<Resource> previewPublicDocument(
             @PathVariable("token") String token,
             @RequestParam(value = "pin", required = false) String pin) {
-        DocumentRecord doc = shareService.accessPublicDocumentRecord(token, pin);
+        DocumentRecord doc = shareService.resolvePublicDocumentForStream(token, pin);
         Resource resource = resolveDocumentResource(doc);
         MediaType mediaType = resolveMediaType(doc);
+        String filename = (doc.getOriginalFilename() != null && !doc.getOriginalFilename().trim().isEmpty())
+                ? doc.getOriginalFilename()
+                : ((doc.getTitle() != null ? doc.getTitle().replaceAll("[^a-zA-Z0-9._-]", "_") : "document") + ".pdf");
 
         return ResponseEntity.ok()
                 .contentType(mediaType)
-                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + doc.getOriginalFilename() + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
                 .body(resource);
     }
 }

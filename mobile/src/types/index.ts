@@ -172,6 +172,13 @@ export interface ShareTokenItem {
   qr_code_svg?: string;
   expires_at?: string;
   max_access_count?: number;
+  original_filename?: string;
+  base64_data?: string;
+  holder_name?: string;
+  doc_number?: string;
+  dob?: string;
+  ocr_text?: string;
+  sha256_hash?: string;
   access_count: number;
   is_revoked: boolean;
   require_pin: boolean;
@@ -193,6 +200,13 @@ export interface SharedDocumentViewData {
   expires_at?: string;
   access_count: number;
   max_access_count?: number;
+  original_filename?: string;
+  base64_data?: string;
+  holder_name?: string;
+  doc_number?: string;
+  dob?: string;
+  ocr_text?: string;
+  sha256_hash?: string;
 }
 
 export interface NotificationItem {

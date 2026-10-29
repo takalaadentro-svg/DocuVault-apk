@@ -1,13 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  X, Camera, KeyRound, Download, FileText, AlertCircle, 
-  CheckCircle2, ShieldCheck, Image as ImageIcon, RefreshCw, 
-  ExternalLink, Copy, Check, Users, FolderLock, Lock
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
+import { Capacitor } from '@capacitor/core';
+import {
+  X, Camera, KeyRound, Download, FileText, AlertCircle,
+  CheckCircle2, ShieldCheck, Image as ImageIcon, RefreshCw,
+  ExternalLink, Copy, Check, Users, FolderLock, Lock,
+  Eye, Loader2, ZoomIn, ZoomOut
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { api, extractShareToken } from '../services/api';
+import { previewCache } from '../services/previewCache';
+import { showLocalNotification } from '../services/pushNotifications';
 import { SharedDocumentViewData } from '../types';
 import { useTheme } from '../context/ThemeContext';
+import { PDFPreviewViewer } from './PDFPreviewViewer';
 
 interface ScanQRModalProps {
   isOpen: boolean;
@@ -17,9 +24,9 @@ interface ScanQRModalProps {
   onRefresh?: () => void;
 }
 
-export const ScanQRModal: React.FC<ScanQRModalProps> = ({ 
-  isOpen, 
-  onClose, 
+export const ScanQRModal: React.FC<ScanQRModalProps> = ({
+  isOpen,
+  onClose,
   initialToken,
   onSuccess,
   onRefresh,
@@ -40,8 +47,20 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({
   const [isImporting, setIsImporting] = useState(false);
   const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
 
+  // Shared document preview & download state
+  const [docBlob, setDocBlob] = useState<Blob | null>(null);
+  const [blobPreviewUrl, setBlobPreviewUrl] = useState<string | null>(null);
+  const [detectedMime, setDetectedMime] = useState<string | null>(null);
+  const [resolvedFilename, setResolvedFilename] = useState<string | null>(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [showInlinePreview, setShowInlinePreview] = useState(true);
+  const [isZoomed, setIsZoomed] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isOpeningExternal, setIsOpeningExternal] = useState(false);
+
   const qrScannerRef = useRef<Html5Qrcode | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const previewContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Auto-resolve initialToken if provided via deep link
   useEffect(() => {
@@ -55,7 +74,7 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({
 
   // Initialize or stop scanner when modal open state changes
   useEffect(() => {
-    if (isOpen && activeTab === 'camera') {
+    if (isOpen && activeTab === 'camera' && !sharedDoc) {
       startScanner();
     } else {
       stopScanner();
@@ -67,7 +86,6 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({
   }, [isOpen, activeTab, cameraFacing]);
 
   const startScanner = async () => {
-    // Wait for DOM element
     setTimeout(async () => {
       const container = document.getElementById('qr-reader-container');
       if (!container) return;
@@ -76,7 +94,7 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({
         if (qrScannerRef.current) {
           try {
             await qrScannerRef.current.stop();
-          } catch (e) {}
+          } catch (e) { }
           qrScannerRef.current = null;
         }
 
@@ -114,10 +132,50 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({
           await qrScannerRef.current.stop();
         }
         await qrScannerRef.current.clear();
-      } catch (e) {}
+      } catch (e) { }
       qrScannerRef.current = null;
     }
     setIsScanning(false);
+  };
+
+  const loadSharedDocBlob = async (
+    docData: SharedDocumentViewData,
+    cleanToken: string,
+    pin?: string
+  ): Promise<{ blob: Blob; mimeType: string; filename: string } | null> => {
+    setIsLoadingPreview(true);
+    try {
+      // Check memory cache first if doc ID is known
+      if (docData.id) {
+        const cached = previewCache.get(docData.id);
+        if (cached && cached.blob && cached.url) {
+          const mime = cached.mimeType || docData.mime_type || 'application/pdf';
+          const ext = mime.includes('png') ? '.png' : (mime.includes('jpg') || mime.includes('jpeg')) ? '.jpg' : '.pdf';
+          const fname = docData.original_filename || `${(docData.title || 'document').replace(/[^a-zA-Z0-9._-]/g, '_')}${ext}`;
+          setDocBlob(cached.blob);
+          setBlobPreviewUrl(cached.url);
+          setDetectedMime(mime);
+          setResolvedFilename(fname);
+          return { blob: cached.blob, mimeType: mime, filename: fname };
+        }
+      }
+
+      const fetched = await api.fetchSharedDocumentBlob(cleanToken, pin, docData);
+      const url = docData.id
+        ? previewCache.storeBlob(docData.id, fetched.blob, fetched.mimeType)
+        : URL.createObjectURL(fetched.blob);
+
+      setDocBlob(fetched.blob);
+      setBlobPreviewUrl(url);
+      setDetectedMime(fetched.mimeType);
+      setResolvedFilename(fetched.filename);
+      return fetched;
+    } catch (e) {
+      console.warn('Failed to pre-load shared document blob:', e);
+      return null;
+    } finally {
+      setIsLoadingPreview(false);
+    }
   };
 
   const handleDecodedQR = (decodedText: string) => {
@@ -167,13 +225,13 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({
   };
 
   const handleResolveToken = async (tokenToUse?: string) => {
-    let rawToken = (tokenToUse || tokenInput).trim();
+    const rawToken = (tokenToUse || tokenInput).trim();
     if (!rawToken) return;
 
     // Check if it's a family group token
     if (rawToken.includes('/invite/') || rawToken.startsWith('faminv_')) {
-      const inviteToken = rawToken.includes('/invite/') 
-        ? rawToken.split('/invite/').pop()?.split('?')[0] || rawToken 
+      const inviteToken = rawToken.includes('/invite/')
+        ? rawToken.split('/invite/').pop()?.split('?')[0] || rawToken
         : rawToken;
       handleJoinFamily(inviteToken);
       return;
@@ -185,9 +243,12 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({
     setErrorMessage(null);
 
     try {
-      const data = await api.viewSharedDocument(cleanToken, pinInput.trim() || undefined);
+      const pin = pinInput.trim() || undefined;
+      const data = await api.viewSharedDocument(cleanToken, pin);
       setSharedDoc(data);
       setNeedsPin(false);
+      setShowInlinePreview(true);
+      await loadSharedDocBlob(data, cleanToken, pin);
     } catch (err: any) {
       if (err.message?.includes('PIN') || err.message?.includes('401')) {
         setNeedsPin(true);
@@ -222,6 +283,9 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({
         is_family_vault: isFamilyVault,
         pin: pinInput.trim() || undefined,
       });
+      if (imported?.id && docBlob) {
+        previewCache.storeBlob(imported.id, docBlob, detectedMime || sharedDoc?.mime_type);
+      }
       const destination = isFamilyVault ? 'Family Vault' : 'Personal Locker';
       const title = imported?.title || sharedDoc?.title || 'Document';
       setImportSuccessMessage(`"${title}" has been saved into your ${destination}!`);
@@ -231,6 +295,140 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({
       setErrorMessage(err.message || 'Failed to import document into your locker.');
     } finally {
       setIsImporting(false);
+    }
+  };
+
+  const ensureBlobReady = async (): Promise<{ blob: Blob; mimeType: string; filename: string } | null> => {
+    if (!sharedDoc) return null;
+    if (docBlob) {
+      const mime = detectedMime || sharedDoc.mime_type || docBlob.type || 'application/pdf';
+      const ext = mime.includes('png') ? '.png' : (mime.includes('jpg') || mime.includes('jpeg')) ? '.jpg' : '.pdf';
+      const fname = resolvedFilename || sharedDoc.original_filename || `${(sharedDoc.title || 'document').replace(/[^a-zA-Z0-9._-]/g, '_')}${ext}`;
+      return { blob: docBlob, mimeType: mime, filename: fname };
+    }
+    const cleanToken = extractShareToken(tokenInput);
+    return loadSharedDocBlob(sharedDoc, cleanToken, pinInput.trim() || undefined);
+  };
+
+  const handleOpenInNativeViewer = async () => {
+    if (!sharedDoc || isOpeningExternal) return;
+    setIsOpeningExternal(true);
+    setErrorMessage(null);
+    try {
+      const ready = await ensureBlobReady();
+      if (!ready) {
+        throw new Error('Could not load document data for viewing.');
+      }
+
+      if (Capacitor.isNativePlatform()) {
+        const reader = new FileReader();
+        reader.readAsDataURL(ready.blob);
+        reader.onloadend = async () => {
+          try {
+            const base64Data = (reader.result as string).split(',')[1];
+            const savedFile = await Filesystem.writeFile({
+              path: ready.filename,
+              data: base64Data,
+              directory: Directory.Cache,
+              recursive: true,
+            });
+            const canShare = await Share.canShare().then(s => s.value).catch(() => false);
+            if (canShare) {
+              await Share.share({
+                title: sharedDoc.title || 'DocuVault Shared Document',
+                text: `Opening ${ready.filename}`,
+                url: savedFile.uri,
+                dialogTitle: 'View Shared Document',
+              });
+            } else {
+              alert(`Document ready in device cache: ${savedFile.uri}`);
+            }
+          } catch (e: any) {
+            setErrorMessage('Could not open system viewer: ' + (e?.message || e));
+          } finally {
+            setIsOpeningExternal(false);
+          }
+        };
+      } else {
+        const url = blobPreviewUrl || URL.createObjectURL(ready.blob);
+        window.open(url, '_blank');
+        setIsOpeningExternal(false);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to open document preview.');
+      setIsOpeningExternal(false);
+    }
+  };
+
+  const handleViewPreviewClick = async () => {
+    if (!sharedDoc) return;
+    if (!showInlinePreview) {
+      setShowInlinePreview(true);
+    }
+    if (!docBlob && !isLoadingPreview) {
+      await ensureBlobReady();
+    }
+    if (previewContainerRef.current) {
+      previewContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  };
+
+  const handleDownloadFile = async () => {
+    if (!sharedDoc || isDownloading) return;
+    setIsDownloading(true);
+    setErrorMessage(null);
+    try {
+      const ready = await ensureBlobReady();
+      if (!ready) {
+        throw new Error('Could not retrieve file for download.');
+      }
+
+      if (Capacitor.isNativePlatform()) {
+        const reader = new FileReader();
+        reader.readAsDataURL(ready.blob);
+        reader.onloadend = async () => {
+          try {
+            const base64Data = (reader.result as string).split(',')[1];
+            const savedFile = await Filesystem.writeFile({
+              path: ready.filename,
+              data: base64Data,
+              directory: Directory.Cache,
+              recursive: true,
+            });
+
+            showLocalNotification('DocuVault Download', `Downloaded: ${ready.filename}`);
+
+            const canShare = await Share.canShare().then(s => s.value).catch(() => false);
+            if (canShare) {
+              await Share.share({
+                title: sharedDoc.title || 'DocuVault Document',
+                text: `Save or view ${ready.filename}`,
+                url: savedFile.uri,
+                dialogTitle: 'Save or View Document',
+              });
+            } else {
+              alert(`Document saved to device cache: ${ready.filename}`);
+            }
+          } catch (nativeErr: any) {
+            setErrorMessage('Could not save file to device: ' + (nativeErr?.message || nativeErr));
+          } finally {
+            setIsDownloading(false);
+          }
+        };
+      } else {
+        const url = window.URL.createObjectURL(ready.blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = ready.filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => window.URL.revokeObjectURL(url), 1500);
+        setIsDownloading(false);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Download failed.');
+      setIsDownloading(false);
     }
   };
 
@@ -244,6 +442,12 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({
     setFamilyInviteJoined(null);
     setImportSuccessMessage(null);
     setIsImporting(false);
+    setDocBlob(null);
+    setBlobPreviewUrl(null);
+    setDetectedMime(null);
+    setResolvedFilename(null);
+    setIsLoadingPreview(false);
+    setIsZoomed(false);
     if (activeTab === 'camera') {
       startScanner();
     }
@@ -256,6 +460,18 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({
   };
 
   if (!isOpen) return null;
+
+  const rawMime = (detectedMime || sharedDoc?.mime_type || '').toLowerCase();
+  const rawName = (resolvedFilename || sharedDoc?.original_filename || sharedDoc?.title || '').toLowerCase();
+  const isPdf = rawMime.includes('pdf') || rawName.endsWith('.pdf');
+  const isImage = rawMime.includes('image') ||
+    rawName.endsWith('.jpg') ||
+    rawName.endsWith('.jpeg') ||
+    rawName.endsWith('.png') ||
+    rawName.endsWith('.webp') ||
+    rawName.endsWith('.gif') ||
+    rawName.endsWith('.svg') ||
+    rawName.endsWith('.bmp');
 
   return (
     <div style={{
@@ -278,7 +494,7 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({
         border: `1px solid ${colors.surfaceBorder}`,
         width: '100%',
         maxWidth: 480,
-        maxHeight: '90vh',
+        maxHeight: '92vh',
         overflowY: 'auto',
         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6)',
       }}>
@@ -422,10 +638,10 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({
               backgroundColor: colors.surfaceCard,
               borderRadius: 16,
               border: `1px solid ${colors.surfaceBorder}`,
-              padding: 20,
+              padding: 18,
               display: 'flex',
               flexDirection: 'column',
-              gap: 16,
+              gap: 14,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{
@@ -437,10 +653,11 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({
                   alignItems: 'center',
                   justifyContent: 'center',
                   color: colors.accentLight,
+                  flexShrink: 0,
                 }}>
                   <FileText size={24} />
                 </div>
-                <div>
+                <div style={{ overflow: 'hidden' }}>
                   <h3 style={{ fontSize: 16, fontWeight: 700, color: colors.text }}>
                     {sharedDoc.title}
                   </h3>
@@ -477,24 +694,135 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({
                 </div>
               </div>
 
-              {sharedDoc.mime_type?.startsWith('image/') && (
-                <div style={{
-                  padding: 8,
-                  backgroundColor: '#020617',
-                  borderRadius: 12,
-                  border: `1px solid ${colors.surfaceBorder}`,
-                  textAlign: 'center',
-                  maxHeight: 220,
-                  overflow: 'hidden',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
-                  <img
-                    src={sharedDoc.preview_url}
-                    alt={sharedDoc.title}
-                    style={{ maxWidth: '100%', maxHeight: 200, objectFit: 'contain', borderRadius: 8 }}
-                  />
+              {/* Interactive In-App Document Preview Section (PDF & Image) */}
+              {showInlinePreview && (
+                <div
+                  ref={previewContainerRef}
+                  style={{
+                    borderRadius: 14,
+                    border: `1px solid ${colors.surfaceBorder}`,
+                    backgroundColor: colors.surface,
+                    overflow: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
+                >
+                  {/* Preview Mini Header */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 12px',
+                    borderBottom: `1px solid ${colors.surfaceBorder}`,
+                    backgroundColor: colors.surfaceCard,
+                    fontSize: 11,
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Eye size={13} color={colors.accentLight} />
+                      <span style={{ fontWeight: 700, color: colors.text }}>
+                        {isPdf ? 'PDF Document Preview' : isImage ? 'Image Preview' : 'Document Preview'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {isImage && (blobPreviewUrl || sharedDoc.preview_url) && (
+                        <button
+                          type="button"
+                          onClick={() => setIsZoomed(!isZoomed)}
+                          style={{
+                            padding: '4px 8px',
+                            borderRadius: 6,
+                            backgroundColor: colors.surface,
+                            border: `1px solid ${colors.surfaceBorder}`,
+                            color: colors.text,
+                            fontSize: 11,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                        >
+                          {isZoomed ? <ZoomOut size={12} /> : <ZoomIn size={12} />}
+                          <span>{isZoomed ? 'Fit' : 'Zoom'}</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleOpenInNativeViewer}
+                        disabled={isOpeningExternal}
+                        style={{
+                          padding: '4px 8px',
+                          borderRadius: 6,
+                          backgroundColor: 'rgba(13, 148, 136, 0.15)',
+                          border: `1px solid ${colors.accent}`,
+                          color: colors.accentLight,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
+                      >
+                        <ExternalLink size={12} />
+                        <span>{isOpeningExternal ? 'Opening...' : 'System Viewer'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Preview Viewport */}
+                  {isLoadingPreview && !blobPreviewUrl ? (
+                    <div style={{ padding: 32, textAlign: 'center' }}>
+                      <Loader2 size={28} color={colors.accentLight} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 8px' }} />
+                      <div style={{ fontSize: 12, fontWeight: 600, color: colors.textMuted }}>
+                        Loading shared document preview...
+                      </div>
+                    </div>
+                  ) : isImage && (blobPreviewUrl || sharedDoc.preview_url) ? (
+                    <div style={{
+                      padding: 10,
+                      backgroundColor: '#020617',
+                      maxHeight: isZoomed ? 420 : 260,
+                      overflow: 'auto',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <img
+                        src={blobPreviewUrl || sharedDoc.preview_url}
+                        alt={sharedDoc.title}
+                        style={{
+                          maxWidth: isZoomed ? 'none' : '100%',
+                          maxHeight: isZoomed ? 'none' : 240,
+                          width: isZoomed ? '175%' : 'auto',
+                          objectFit: 'contain',
+                          borderRadius: 8,
+                        }}
+                      />
+                    </div>
+                  ) : isPdf && (docBlob || blobPreviewUrl || sharedDoc.preview_url) ? (
+                    <div style={{ maxHeight: 420, overflow: 'hidden' }}>
+                      <PDFPreviewViewer
+                        blob={docBlob}
+                        url={blobPreviewUrl || sharedDoc.preview_url}
+                        docTitle={sharedDoc.title}
+                        onOpenExternal={handleOpenInNativeViewer}
+                        onDownload={handleDownloadFile}
+                        isOpeningExternal={isOpeningExternal}
+                        isDownloading={isDownloading}
+                      />
+                    </div>
+                  ) : (
+                    <div style={{ padding: 24, textAlign: 'center' }}>
+                      <FileText size={32} color={colors.accentLight} style={{ margin: '0 auto 8px' }} />
+                      <div style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>
+                        {sharedDoc.title}
+                      </div>
+                      <div style={{ fontSize: 11, color: colors.textMuted, marginTop: 4 }}>
+                        Tap below to view in system viewer or download to your device.
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -518,6 +846,7 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({
                 ) : (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     <button
+                      type="button"
                       onClick={() => handleImportDoc(false)}
                       disabled={isImporting}
                       style={{
@@ -540,6 +869,7 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({
                       <span>{isImporting ? 'Saving...' : 'Save to Personal'}</span>
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleImportDoc(true)}
                       disabled={isImporting}
                       style={{
@@ -564,19 +894,26 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({
                   </div>
                 )}
 
-                <a
-                  href={sharedDoc.preview_url}
-                  target="_blank"
-                  rel="noreferrer"
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (showInlinePreview && (docBlob || blobPreviewUrl)) {
+                      handleOpenInNativeViewer();
+                    } else {
+                      handleViewPreviewClick();
+                    }
+                  }}
+                  disabled={isOpeningExternal || isLoadingPreview}
                   style={{
                     padding: '12px',
                     borderRadius: 12,
                     backgroundColor: colors.accent,
                     color: '#FFF',
+                    border: 'none',
                     fontWeight: 700,
                     fontSize: 14,
                     textAlign: 'center',
-                    textDecoration: 'none',
+                    cursor: (isOpeningExternal || isLoadingPreview) ? 'not-allowed' : 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -584,11 +921,19 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({
                   }}
                 >
                   <ExternalLink size={16} />
-                  View / Preview Document
-                </a>
+                  <span>
+                    {isOpeningExternal
+                      ? 'Opening Document Viewer...'
+                      : isLoadingPreview
+                        ? 'Loading Preview...'
+                        : 'View / Preview Document'}
+                  </span>
+                </button>
 
-                <a
-                  href={sharedDoc.download_url}
+                <button
+                  type="button"
+                  onClick={handleDownloadFile}
+                  disabled={isDownloading}
                   style={{
                     padding: '12px',
                     borderRadius: 12,
@@ -598,18 +943,20 @@ export const ScanQRModal: React.FC<ScanQRModalProps> = ({
                     fontWeight: 600,
                     fontSize: 14,
                     textAlign: 'center',
-                    textDecoration: 'none',
+                    cursor: isDownloading ? 'not-allowed' : 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 8,
+                    opacity: isDownloading ? 0.7 : 1,
                   }}
                 >
                   <Download size={16} />
-                  Download File
-                </a>
+                  <span>{isDownloading ? 'Downloading File...' : 'Download File'}</span>
+                </button>
 
                 <button
+                  type="button"
                   onClick={handleReset}
                   style={{
                     padding: '8px',
