@@ -1,4 +1,4 @@
-# DocuVault 2.0 — Smart Digital Document Locker & Family Emergency Vault
+# DocuVault — Smart Digital Document Locker & Family Emergency Vault
 
 <p align="center">
   <img src="https://img.shields.io/badge/Security-Spring%20Security%20%7C%20JWT%20%7C%20BCrypt%20%7C%20Biometrics-0D9488?style=for-the-badge&logo=springsecurity" alt="Spring Security" />
